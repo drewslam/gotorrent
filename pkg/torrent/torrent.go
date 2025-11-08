@@ -11,12 +11,13 @@ package torrent
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/drewslam/gotorrent/pkg/bcodec"
 )
 
 type Torrent struct {
-	Info     InfoDict
+	Info     *InfoDict
 	Announce string
 }
 
@@ -24,8 +25,7 @@ type InfoDict struct {
 	Name     string
 	PieceLen int
 	Pieces   [][20]byte
-	KeySize  int
-	Files    *FileDict
+	Files    []*FileDict
 }
 
 type FileDict struct {
@@ -33,14 +33,14 @@ type FileDict struct {
 	Path   []string
 }
 
-func NewTorrent(info InfoDict, announce string) *Torrent {
+func NewTorrent(info *InfoDict, announce string) *Torrent {
 	return &Torrent{
 		Info:     info,
 		Announce: announce,
 	}
 }
 
-func NewInfoDict(name string, pieceLen int, pieces [][20]byte, fileDict *FileDict) *InfoDict {
+func NewInfoDict(name string, pieceLen int, pieces [][20]byte, fileDict []*FileDict) *InfoDict {
 	return &InfoDict{
 		Name:     name,
 		PieceLen: pieceLen,
@@ -61,7 +61,7 @@ func ExtractPieces(pieces []byte, pieceCount int) [][20]byte {
 		log.Fatalf("invalid piece length: %d", len(pieces))
 	}
 	pc := make([][20]byte, pieceCount)
-	for i := range pieceCount {
+	for i := 0; i < pieceCount; i++ {
 		copy(pc[i][:], pieces[i*20:(i+1)*20])
 	}
 	return pc
@@ -97,10 +97,16 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) *Torrent {
 		var pieces []byte
 		var length int
 
+		for _, i := range id.GetEntries() {
+			fmt.Printf("%s\n", i.Key)
+		}
+		fmt.Println("--------------------------")
+
 		nm := id.FindEntry([]byte("name"))
 		pl := id.FindEntry([]byte("piece length"))
 		pc := id.FindEntry([]byte("pieces"))
 		ln := id.FindEntry([]byte("length"))
+		fi := id.FindEntry([]byte("files"))
 
 		if nm == nil {
 			log.Fatalf("name cannot be parsed: %v", nm)
@@ -142,20 +148,67 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) *Torrent {
 			length = int(node.GetValue().Big_ival)
 		}
 
-		fmt.Printf("%s - %d - %d ", name, pieceLen, len(pieces))
+		var fileList []*FileDict
+		if fi != nil {
+			node, ok := bcodec.AsListNode(fi.Value)
+			if !ok {
+				log.Fatalf("cannot parse node: %v", node)
+			}
+			for _, i := range node.GetChildren() {
+				fd, ok := bcodec.AsDictNode(i)
+				if !ok {
+					log.Fatalf("unable to parse file path: %v", fd)
+				}
 
-		filePath := make([]string, 0)
-		filePath = append(filePath, name)
+				lno := fd.FindEntry([]byte("length"))
+				fp := fd.FindEntry([]byte("path"))
 
-		fileDict := NewFileDict(length, filePath)
+				if lno == nil {
+					log.Fatalf("unable to parse length: %v", lno)
+				}
+				if fp == nil {
+					log.Fatalf("unable to parse file path: %v", fp)
+				}
 
-		fmt.Printf("- %d - %s\n", fileDict.Length, fileDict.Path[0])
+				lv, ok := bcodec.AsValueNode(lno.Value)
+				if !ok {
+					log.Fatalf("unable to parse length value: %v", lv)
+				}
 
-		infoDict = NewInfoDict(name, pieceLen, ExtractPieces(pieces, len(pieces)/20), fileDict)
+				pv, ok := bcodec.AsListNode(fp.Value)
+				if !ok {
+					log.Fatalf("unable to parse path value: %v", pv)
+				}
+				var filePath []string
+				for _, j := range pv.GetChildren() {
+					node, ok := bcodec.AsValueNode(j)
+					if !ok {
+						log.Fatalf("cannot parse node: %v", node)
+					}
+					filePath = append(filePath, string(node.GetValue().Strval))
+				}
+				fileDict := NewFileDict(int(lv.GetValue().Big_ival), filePath)
+				fileList = append(fileList, fileDict)
+			}
+		} else {
+			filePath := []string{name}
+			fileList = append(fileList, NewFileDict(length, filePath))
+		}
+
+		infoDict = NewInfoDict(name, pieceLen, ExtractPieces(pieces, len(pieces)/20), fileList)
 	}
 
 
-	return NewTorrent(*infoDict, announce);
+	return NewTorrent(infoDict, announce);
 }
 
-func (t *Torrent) PrintMetadata() {}
+func (t *Torrent) PrintMetadata() {
+	fmt.Printf("announce: %s\npiece length: %d\n", t.Announce, t.Info.PieceLen)
+	fmt.Printf("name: %s\n", t.Info.Name)
+
+	if len(t.Info.Files) > 0 {
+		for c, i := range t.Info.Files {
+			fmt.Printf("%d - %s - %d\n", c, strings.Join(i.Path, "/"), i.Length)
+		}
+	}
+}
