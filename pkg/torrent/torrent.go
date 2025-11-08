@@ -96,10 +96,11 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 		var pieces []byte
 		var length int
 
-		for _, i := range id.GetEntries() {
+		// DEBUG PRINT
+		/*for _, i := range id.GetEntries() {
 			fmt.Printf("%s\n", i.Key)
 		}
-		fmt.Println("--------------------------")
+		fmt.Println("--------------------------")*/
 
 		nm := id.FindEntry([]byte("name"))
 		pl := id.FindEntry([]byte("piece length"))
@@ -137,9 +138,7 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 			pieces = node.GetValue().Strval
 		}
 
-		if ln == nil {
-			fmt.Println("no length header present: multi-file mode")
-		} else {
+		if ln != nil {
 			node, ok := bcodec.AsValueNode(ln.Value)
 			if !ok {
 				return nil, fmt.Errorf("cannot parse node: %v", node)
