@@ -138,16 +138,16 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 			pieces = node.GetValue().Strval
 		}
 
+		var fileList []*FileDict
 		if ln != nil {
 			node, ok := bcodec.AsValueNode(ln.Value)
 			if !ok {
 				return nil, fmt.Errorf("cannot parse node: %v", node)
 			}
 			length = int(node.GetValue().Big_ival)
-		}
-
-		var fileList []*FileDict
-		if fi != nil {
+			filePath := []string{name}
+			fileList = append(fileList, NewFileDict(length, filePath))
+		} else if fi != nil {
 			node, ok := bcodec.AsListNode(fi.Value)
 			if !ok {
 				return nil, fmt.Errorf("cannot parse node: %v", node)
@@ -179,18 +179,17 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 				}
 				var filePath []string
 				for _, j := range pv.GetChildren() {
-					node, ok := bcodec.AsValueNode(j)
+					no, ok := bcodec.AsValueNode(j)
 					if !ok {
 						return nil, fmt.Errorf("cannot parse node: %v", node)
 					}
-					filePath = append(filePath, string(node.GetValue().Strval))
+					filePath = append(filePath, string(no.GetValue().Strval))
 				}
 				fileDict := NewFileDict(int(lv.GetValue().Big_ival), filePath)
 				fileList = append(fileList, fileDict)
 			}
 		} else {
-			filePath := []string{name}
-			fileList = append(fileList, NewFileDict(length, filePath))
+			return nil, fmt.Errorf("torrent must have either 'length' or 'files' field")
 		}
 
 		exp, err := ExtractPieces(pieces, len(pieces)/20)
