@@ -17,7 +17,7 @@ import (
 
 type Torrent struct {
 	Info     *InfoDict
-	Announce string
+	Announce []string
 }
 
 type InfoDict struct {
@@ -25,6 +25,7 @@ type InfoDict struct {
 	PieceLen int
 	Pieces   [][20]byte
 	Files    []*FileDict
+	UrlList  []string
 }
 
 type FileDict struct {
@@ -32,19 +33,20 @@ type FileDict struct {
 	Path   []string
 }
 
-func NewTorrent(info *InfoDict, announce string) *Torrent {
+func NewTorrent(info *InfoDict, announce []string) *Torrent {
 	return &Torrent{
 		Info:     info,
 		Announce: announce,
 	}
 }
 
-func NewInfoDict(name string, pieceLen int, pieces [][20]byte, fileDict []*FileDict) *InfoDict {
+func NewInfoDict(name string, pieceLen int, pieces [][20]byte, fileDict []*FileDict, urlList []string) *InfoDict {
 	return &InfoDict{
 		Name:     name,
 		PieceLen: pieceLen,
 		Pieces:   pieces,
 		Files:    fileDict,
+		UrlList:  urlList,
 	}
 }
 
@@ -67,20 +69,54 @@ func ExtractPieces(pieces []byte, pieceCount int) ([][20]byte, error) {
 }
 
 func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
-	var announce string
+	var announceList []string
 	var infoDict *InfoDict
+	var urlList []string
 
 	an := torrentFile.FindEntry([]byte("announce"))
+	al := torrentFile.FindEntry([]byte("announce-list"))
 	in := torrentFile.FindEntry([]byte("info"))
+	ul := torrentFile.FindEntry([]byte("url-list"))
 
-	if an == nil {
-		announce = ""
-	} else {
+	// announce-list is a list of lists, where each inner list contains an announce url
+	if al != nil {
+		ol, ok := bcodec.AsListNode(al.Value)
+		if !ok {
+			return nil, fmt.Errorf("cannot parse node: %v", ol)
+		}
+		for _, il := range ol.GetChildren() {
+			ill, k := bcodec.AsListNode(il)
+			if !k {
+				return nil, fmt.Errorf("cannot parse node: %v", ill)
+			}
+			for _, url := range ill.GetChildren() {
+				urlv, y := bcodec.AsValueNode(url)
+				if !y {
+					return nil, fmt.Errorf("cannot parse node: %v", urlv)
+				}
+				announceList = append(announceList, string(urlv.GetValue().Strval))
+			}
+		}
+	} else if an != nil {
 		node, ok := bcodec.AsValueNode(an.Value)
 		if !ok {
 			return nil, fmt.Errorf("cannot parse node: %v", node)
 		}
-		announce = string(node.GetValue().Strval)
+		announceList = []string{string(node.GetValue().Strval)}
+	} else {
+		announceList = []string{""}
+	}
+
+	if ul != nil {
+		list, ok := bcodec.AsListNode(ul.Value)
+		if !ok {
+			return nil, fmt.Errorf("cannot parse node: %v", list)
+		}
+		for _, url := range list.GetChildren() {
+			if urlv, _ := bcodec.AsValueNode(url); urlv != nil {
+				urlList = append(urlList, string(urlv.GetValue().Strval))
+			}
+		}
 	}
 
 	if in == nil {
@@ -196,14 +232,18 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract bytes from pieces: %v", err)
 		}
-		infoDict = NewInfoDict(name, pieceLen, exp, fileList)
+		infoDict = NewInfoDict(name, pieceLen, exp, fileList, urlList)
 	}
 
-	return NewTorrent(infoDict, announce), nil
+	return NewTorrent(infoDict, announceList), nil
+}
+
+func (t *Torrent) InfoHash() [20]byte {
+	return [20]byte{}
 }
 
 func (t *Torrent) PrintMetadata() {
-	fmt.Printf("announce: %s\npiece length: %d\n", t.Announce, t.Info.PieceLen)
+	fmt.Printf("announce: %s\npiece length: %d\n", t.Announce[0], t.Info.PieceLen)
 	fmt.Printf("name: %s\n", t.Info.Name)
 
 	if len(t.Info.Files) > 0 {
@@ -211,4 +251,5 @@ func (t *Torrent) PrintMetadata() {
 			fmt.Printf("%d - %s - %d\n", c, strings.Join(i.Path, "/"), i.Length)
 		}
 	}
+
 }
