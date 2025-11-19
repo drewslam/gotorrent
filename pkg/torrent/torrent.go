@@ -9,6 +9,7 @@
 package torrent
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 type Torrent struct {
 	Info     *InfoDict
 	Announce []string
+	Hash     []byte
 }
 
 type InfoDict struct {
@@ -33,10 +35,11 @@ type FileDict struct {
 	Path   []string
 }
 
-func NewTorrent(info *InfoDict, announce []string) *Torrent {
+func NewTorrent(info *InfoDict, announce []string, hash []byte) *Torrent {
 	return &Torrent{
 		Info:     info,
 		Announce: announce,
+		Hash:     hash,
 	}
 }
 
@@ -62,15 +65,16 @@ func ExtractPieces(pieces []byte, pieceCount int) ([][20]byte, error) {
 		return nil, fmt.Errorf("invalid piece length: %d", len(pieces))
 	}
 	pc := make([][20]byte, pieceCount)
-	for i := 0; i < pieceCount; i++ {
+	for i := range pieceCount {
 		copy(pc[i][:], pieces[i*20:(i+1)*20])
 	}
 	return pc, nil
 }
 
-func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
+func ParseMetadata(torrentFile *bcodec.BDictNode, rawBytes []byte) (*Torrent, error) {
 	var announceList []string
 	var infoDict *InfoDict
+	var infoHash []byte
 	var urlList []string
 
 	an := torrentFile.FindEntry([]byte("announce"))
@@ -122,6 +126,9 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 	if in == nil {
 		return nil, fmt.Errorf("contents of info dictionary cannot be parsed")
 	} else {
+		start := in.Value.GetOffset()
+		end := start + in.Value.GetLength()
+		infoHash = rawBytes[start:end]
 		id, ok := bcodec.AsDictNode(in.Value)
 		if !ok {
 			return nil, fmt.Errorf("cannot parse node: %v", id)
@@ -235,11 +242,11 @@ func ParseMetadata(torrentFile *bcodec.BDictNode) (*Torrent, error) {
 		infoDict = NewInfoDict(name, pieceLen, exp, fileList, urlList)
 	}
 
-	return NewTorrent(infoDict, announceList), nil
+	return NewTorrent(infoDict, announceList, infoHash), nil
 }
 
 func (t *Torrent) InfoHash() [20]byte {
-	return [20]byte{}
+	return sha1.Sum(t.Hash)
 }
 
 func (t *Torrent) PrintMetadata() {
