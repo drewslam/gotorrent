@@ -6,18 +6,14 @@
 
 package tracker
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 const defaultPort = 6881
-const magicVal = "DSGT01"
-
-type Event int
-
-const (
-	STARTED Event = iota
-	STOPPED
-	COMPLETED
-)
+const idPrefix = "DSGT01"
 
 type Peer struct {
 	ID   []byte
@@ -27,7 +23,7 @@ type Peer struct {
 
 func NewPeer() *Peer {
 	return &Peer{
-		ID:   []byte(magicVal + "00000000000001"),
+		ID:   []byte(idPrefix + "00000000000001"),
 		Port: defaultPort,
 	}
 }
@@ -38,16 +34,17 @@ type Request struct {
 	Uploaded   uint64
 	Downloaded uint64
 	Left       uint64
-	Event      Event
+	Event      string
 }
 
 func NewRequest(ih [20]byte, peer *Peer, filesize uint64) *Request {
 	return &Request{
-		InfoHash: ih,
-		Peer:     peer,
-		Uploaded: 0,
+		InfoHash:   ih,
+		Peer:       peer,
+		Uploaded:   0,
 		Downloaded: 0,
-		Left: filesize,
+		Left:       filesize,
+		Event:      "started",
 	}
 }
 
@@ -58,7 +55,27 @@ type Response struct {
 	Peers    [][6]byte
 }
 
-func (r *Request) URL(announce string, path string) string {
+func escapeString(data []byte) string {
+	var res strings.Builder
+	for _, b := range data {
+		res.WriteString(fmt.Sprintf("%%%02X", b))
+	}
+	return res.String()
+}
+
+func (r *Request) URL(announce string) string {
 	port := strconv.Itoa(r.Peer.Port)
-	return announce+"?info_hash="+path+"&peer_id="+string(r.Peer.ID)+"&port="+port
+	uploaded := strconv.FormatUint(r.Uploaded, 10)
+	downloaded := strconv.FormatUint(r.Downloaded, 10)
+	left := strconv.FormatUint(r.Left, 10)
+	peerId := escapeString(r.Peer.ID)
+	infoHash := escapeString(r.InfoHash[:])
+	return announce + "?info_hash=" + infoHash +
+		"&peer_id=" + peerId +
+		"&uploaded=" + uploaded +
+		"&downloaded=" + downloaded +
+		"&left=" + left +
+		"&event=" + r.Event +
+		"&compact=1" +
+		"&port=" + port
 }
