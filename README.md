@@ -9,7 +9,7 @@ A library for implementing the Bittorrent protocol focused on performance and ty
 ## ToDo List
 
 - Bencode encoding format          DONE
-- Metainfo structs + parsing       IN-PROGRESS
+- Metainfo structs + parsing       DONE
 - HTTP Tracker client
 - Peer protocol
 - Piece management & verification
