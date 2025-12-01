@@ -139,12 +139,6 @@ func ParseMetadata(torrentFile *bcodec.BDictNode, rawBytes []byte) (*Torrent, er
 		var pieces []byte
 		var length int
 
-		// DEBUG PRINT
-		/*for _, i := range id.GetEntries() {
-			fmt.Printf("%s\n", i.Key)
-		}
-		fmt.Println("--------------------------")*/
-
 		nm := id.FindEntry([]byte("name"))
 		pl := id.FindEntry([]byte("piece length"))
 		pc := id.FindEntry([]byte("pieces"))
@@ -247,6 +241,17 @@ func ParseMetadata(torrentFile *bcodec.BDictNode, rawBytes []byte) (*Torrent, er
 
 func (t *Torrent) InfoHash() [20]byte {
 	return sha1.Sum(t.Hash)
+}
+
+func (t *Torrent) FileSize() uint64 {
+	if t == nil { return 0 }
+
+	var fs uint64 = 0
+	for _, file := range t.Info.Files {
+		fs += uint64(file.Length)
+	}
+
+	return fs
 }
 
 func (t *Torrent) PrintMetadata() {
