@@ -8,11 +8,12 @@ package tracker
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 )
 
-const DefaultPort = 6881
-const IdPrefix = "DSGT01"
+const DefaultPort uint16 = 6881
+const IdPrefix string = "DSGT01"
 
 func EscapeBytes(data []byte) string {
 	var res strings.Builder
@@ -22,4 +23,6 @@ func EscapeBytes(data []byte) string {
 	return res.String()
 }
 
-
+func NewTransactionID() uint32 {
+	return rand.Uint32()
+}

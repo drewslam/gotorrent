@@ -1,40 +1,42 @@
 /*
- * title: gotorrent-tracker peer
+ * title: gotorrent-tracker
  * author: Andrew Souza
  * GPLv3
  */
 
 package tracker
 
+import (
+	"crypto/rand"
+	"net"
+)
+
 // Peer
 type Peer struct {
-	ID   []byte
-	IP   string
-	Port int
+	ID   [20]byte
+	IP   net.IP
+	Port uint16
 }
 
 func NewPeer(t ...any) *Peer {
-	peer := &Peer{
-		ID:   []byte(IdPrefix + "00000000000001"),
-		Port: DefaultPort,
-	}
+	var id [20]byte
+	var ip net.IP
+	port := DefaultPort
+	copy(id[:6], []byte(IdPrefix))
+	rand.Read(id[6:])
 
-	if t == nil {
-		return peer
-	}
-
-	for _, i := range t {
-		if a, ok := i.([]byte); ok {
-			peer.ID = a
+	for _, arg := range t {
+		if a, ok := arg.(net.IP); ok {
+			ip = a
 		}
-		if a, ok := i.(string); ok {
-			peer.IP = a
-		}
-		if a, ok := i.(int); ok {
-			peer.Port = a
+		if a, ok := arg.(uint16); ok {
+			port = a
 		}
 	}
 
-	return peer
+	return &Peer{
+		ID:   id,
+		IP:   ip,
+		Port: port,
+	}
 }
-

@@ -8,8 +8,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
+	"net"
 	"net/url"
+	"os"
 
 	"github.com/drewslam/gotorrent/pkg/bcodec"
 	"github.com/drewslam/gotorrent/pkg/torrent"
@@ -33,6 +34,8 @@ func DecodeTorrentFile(file []byte) (*torrent.Torrent, error) {
 }
 
 func main() {
+	sessionID := tracker.NewTransactionID()
+
 	args := os.Args
 	rawBytes, err := os.ReadFile(args[1])
 	if err != nil {
@@ -50,11 +53,10 @@ func main() {
 	peer := tracker.NewPeer()
 
 	req := tracker.NewRequest(sum, peer, fileSize)
-
 	announce := tor.Announce[0]
 	ur, err := url.Parse(announce)
 	if err != nil {
-		log.Fatalf("invalid transfer protocol: %v", err)
+		log.Fatalf("invalid announce url: %v", err)
 	}
 
 	var rs *tracker.Response
@@ -65,7 +67,66 @@ func main() {
 			log.Fatalf("failed to receive http response: %v", err)
 		}
 	case "udp":
-		fmt.Println("udp to be implemented at a later date")
+		// rs, err = req.FetchUdpResponse(ur)
+		remoteHost := ur.Hostname()
+		remotePort := ur.Port()
+		remoteAddr, err := net.ResolveUDPAddr("udp", remoteHost+":"+remotePort)
+		if err != nil {
+			log.Fatalf("failed to resolve udp address: %v", err)
+		}
+
+		conn, err := net.DialUDP("udp", nil, remoteAddr)
+		if err != nil {
+			log.Fatalf("failed to dial udp address: %v", err)
+		}
+		defer conn.Close()
+
+		response, err := tracker.UDPConnect(conn)
+		if err != nil {
+			log.Fatalf("failed to connect to udp network: %v", err)
+		}
+
+		annTrxID := tracker.NewTransactionID()
+
+		udpAnn := &tracker.AnnounceParams{
+			InfoHash:   sum,
+			PeerID:     peer.ID,
+			Downloaded: req.Downloaded,
+			Left:       req.Left,
+			Uploaded:   req.Uploaded,
+			Event:      0,
+			IPOverride: 0,
+			Key:        sessionID,
+			NumWant:    -1,
+			Port:       uint16(req.Peer.Port),
+		}
+
+		announceRequest, err := tracker.BuildAnnounceRequest(response.ConnID, annTrxID, udpAnn)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = conn.Write(announceRequest)
+		if err != nil {
+			log.Fatalf("failed to write to UDP server: %v", err)
+		}
+
+		annRes := make([]byte, 1024)
+		resLen, err := conn.Read(annRes)
+		if err != nil {
+			log.Fatalf("failed to read from UDP source: %v", err)
+		}
+
+		announceResponse, err := tracker.ParseAnnounceResponse(annRes[:resLen])
+		if err != nil {
+			log.Fatalf("failed to decode announce response: %v", err)
+		}
+
+		if annTrxID != announceResponse.TransactionID {
+			log.Fatal("mismatched transaction ID")
+		}
+
+
 	case "":
 		fmt.Println("no announce scheme detected")
 	default:
