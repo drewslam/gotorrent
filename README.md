@@ -1,18 +1,122 @@
+
 # gotorrent
 
-A library for implementing the Bittorrent protocol focused on performance and type safety.
+A BitTorrent library for Go focused on feature-completeness and low resource usage.
 
-## Requirements
+[![img](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[https://img.shields.io/badge/Go-%3E%3D%201.22-blue](https://go.dev/)
 
-- A recent version of Go.
 
-## ToDo List
+## Development Status
 
-- Bencode encoding format          DONE
-- Metainfo structs + parsing       DONE
-- HTTP Tracker client
-- Peer protocol
-- Piece management & verification
-- File I/O
-- Download Manager
-- CLI
+This library is in **early development**. Core components (bencode, metadata parsing, tracker communication) are functional, but the peer wire protocol and download management are not yet implemented.
+
+
+## Features
+
+### Currently Working
+
+-   ✅ **Bencode encoding/decoding** - Full support for all bencode types
+-   ✅ **Torrent file parsing** - Single and multi-file torrents
+-   ✅ **Info hash calculation** - Proper SHA-1 of info dictionary
+-   ✅ **HTTP/HTTPS trackers** - Complete announce protocol
+-   ✅ **UDP trackers** - Connect and announce implementation
+-   ✅ **Peer discovery** - Get peer lists from trackers
+
+### Limitations
+
+-   Only supports compact peer format (not dictionary format)
+-   No retry logic or timeout handling
+-   Response types differ between HTTP/UDP (being unified)
+-   Single-threaded tracker communication
+
+### Not Yet Implemented
+
+-   Peer wire protocol (connecting to/from peers)
+-   Piece download/upload logic
+-   File I/O and assembly
+-   DHT, PEX, magnet links
+-   High-level client API
+
+## Architecture
+
+### Packages
+
+**`pkg/bcodec`** - Bencode encoding and decoding
+
+-   Tree-based parser with typed nodes
+-   Support for all bencode types (integers, strings, lists, dictionaries)
+-   Type-safe casting and visitor pattern
+
+**`pkg/torrent`** - Torrent metadata handling
+
+-   Parse .torrent files
+-   Extract info hash, pieces, file information
+-   Support for announce-list and url-list
+
+**`pkg/tracker`** - Tracker communication
+
+-   HTTP/HTTPS tracker protocol
+-   UDP tracker protocol
+-   Peer list retrieval
+
+## Installation
+
+    go get github.com/drewslam/gotorrent
+
+Requires Go 1.22 or later.
+
+## Usage
+
+### Current Capabilities
+
+    // Example of what works today
+    import (
+        "github.com/drewslam/gotorrent/pkg/bcodec"
+        "github.com/drewslam/gotorrent/pkg/torrent"
+        "github.com/drewslam/gotorrent/pkg/tracker"
+    )
+
+    // Parse a torrent file
+    data, _ := os.ReadFile("example.torrent")
+    decoder, _ := bcodec.NewBDecoder(data, false, 0)
+    dict, _ := decoder.DecodeDict()
+    tor, _ := torrent.ParseMetadata(dict, data)
+
+    // Get info hash
+    hash := tor.InfoHash()
+
+    // Contact tracker
+    peer := tracker.NewPeer()
+    req := tracker.NewRequest(hash, peer, tor.FileSize())
+    response, _ := req.FetchHttpResponse(tor.Announce[0])
+
+    // response.PeerDict contains available peers
+    // (connecting to peers not yet implemented)
+
+## Design Goals
+
+1.  **Feature-complete** - Full BitTorrent protocol support
+2.  **Low resource usage** - Efficient memory and CPU utilization
+3.  **Library-first** - Clean API for building clients
+4.  **Well-tested** - Comprehensive test coverage (in progress)
+
+## Development
+
+### Current Focus
+
+-   Unifying HTTP/UDP response types
+-   Implementing peer wire protocol
+-   Building high-level client API
+
+## License
+
+GPL-3.0 - See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+-   BitTorrent protocol specification: [BEP 0003](http://www.bittorrent.org/beps/bep_0003.html)
+-   [libktorrent](https://github.com/KDE/libktorrent) - Design influence for the bcodec package
+
+\`\`\`
+
