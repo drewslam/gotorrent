@@ -4,7 +4,7 @@
 A BitTorrent library for Go focused on feature-completeness and low resource usage.
 
 [![img](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[https://img.shields.io/badge/Go-%3E%3D%201.22-blue](https://go.dev/)
+[![img](https://img.shields.io/badge/Go-%3E%3D%201.22-blue)](https://go.dev/)
 
 
 ## Development Status
