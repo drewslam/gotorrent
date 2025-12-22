@@ -1,7 +1,3 @@
 *.org
 *.torrent
-<<<<<<< HEAD
 *.txt
-=======
-*.txt
->>>>>>> 628547b (Update gitignore.)
