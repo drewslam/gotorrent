@@ -79,20 +79,23 @@ func extractAnnounceList(list *bcodec.BDictEntry, entry *bcodec.BDictEntry) ([]s
 	var announceList []string
 
 	if list != nil {
-		ol, ok := bcodec.AsListNode(list.Value)
+		outer, ok := bcodec.AsListNode(list.Value)
 		if !ok {
-			return nil, fmt.Errorf("cannot parse node: %v", ol)
+			return nil, fmt.Errorf("cannot parse node: %v", outer)
 		}
-		for _, il := range ol.GetChildren() {
-			ill, k := bcodec.AsListNode(il)
+
+		for _, inner := range outer.GetChildren() {
+			item, k := bcodec.AsListNode(inner)
 			if !k {
-				return nil, fmt.Errorf("cannot parse node: %v", ill)
+				return nil, fmt.Errorf("cannot parse node: %v", inner)
 			}
-			for _, url := range ill.GetChildren() {
+
+			for _, url := range item.GetChildren() {
 				urlv, y := bcodec.AsValueNode(url)
 				if !y {
 					return nil, fmt.Errorf("cannot parse node: %v", urlv)
 				}
+
 				announceList = append(announceList, string(urlv.GetValue().Strval))
 			}
 		}
@@ -101,6 +104,7 @@ func extractAnnounceList(list *bcodec.BDictEntry, entry *bcodec.BDictEntry) ([]s
 		if !ok {
 			return nil, fmt.Errorf("cannot parse node: %v", node)
 		}
+
 		announceList = []string{string(node.GetValue().Strval)}
 	} else {
 		return nil, fmt.Errorf("torrent missing announce information")
@@ -146,12 +150,12 @@ func extractPieceArray(node *bcodec.BDictEntry) ([]byte, error) {
 
 func extractPieceLength(node *bcodec.BDictEntry) (int, error) {
 	if node == nil {
-		return -1, fmt.Errorf("piece length cannot be parsed: %v", node)
+		return 0, fmt.Errorf("piece length cannot be parsed: %v", node)
 	}
 
 	a, ok := bcodec.AsValueNode(node.Value)
 	if !ok {
-		return -1, fmt.Errorf("cannot parse node: %v", a)
+		return 0, fmt.Errorf("cannot parse node: %v", a)
 	}
 
 	return int(a.GetValue().Big_ival), nil
@@ -174,8 +178,10 @@ func extractInfoBytes(node *bcodec.BDictEntry, rawBytes []byte) ([]byte, error) 
 	if node == nil || rawBytes == nil {
 		return nil, fmt.Errorf("info structure not present")
 	}
+
 	start := node.Value.GetOffset()
 	end := start + node.Value.GetLength()
+
 	return rawBytes[start:end], nil
 }
 
@@ -186,7 +192,7 @@ func extractSingleFileLength(node *bcodec.BDictEntry) (int, error) {
 
 	a, ok := bcodec.AsValueNode(node.Value)
 	if !ok {
-		return -1, fmt.Errorf("invalid length property: %v", a)
+		return 0, fmt.Errorf("invalid length property: %v", a)
 	}
 
 	return int(a.GetValue().Big_ival), nil
@@ -194,11 +200,13 @@ func extractSingleFileLength(node *bcodec.BDictEntry) (int, error) {
 
 func parseFileList(list *bcodec.BDictEntry, entry *bcodec.BDictEntry, entryName string) ([]*FileDict, error) {
 	var fileList []*FileDict
+
 	if list != nil {
 		node, ok := bcodec.AsListNode(list.Value)
 		if !ok {
 			return nil, fmt.Errorf("cannot parse list node: %v", node)
 		}
+
 		for _, file := range node.GetChildren() {
 			fd, ok := bcodec.AsDictNode(file)
 			if !ok {
@@ -217,30 +225,34 @@ func parseFileList(list *bcodec.BDictEntry, entry *bcodec.BDictEntry, entryName 
 
 			lv, err := extractSingleFileLength(ln)
 			if err != nil {
-				return nil, fmt.Errorf("unable to parse length value: %v", lv)
+				return nil, fmt.Errorf("unable to parse length value: %v", err)
 			}
 
 			pv, ok := bcodec.AsListNode(fp.Value)
 			if !ok {
 				return nil, fmt.Errorf("unable to parse path value: %v", pv)
 			}
+
 			var filePath []string
 			for _, inner := range pv.GetChildren() {
 				no, ok := bcodec.AsValueNode(inner)
 				if !ok {
-					return nil, fmt.Errorf("cannot parse node: %v", no)
+					return nil, fmt.Errorf("invalid path string: %v", no)
 				}
+
 				filePath = append(filePath, string(no.GetValue().Strval))
 			}
-			fileDict := NewFileDict(lv, filePath)
-			fileList = append(fileList, fileDict)
+
+			fileList = append(fileList, NewFileDict(lv, filePath))
 		}
 	} else if entry != nil {
 		length, err := extractSingleFileLength(entry)
 		if err != nil {
-			return nil, fmt.Errorf("extractSingleFileLength failure: %v", err)
+			return nil, fmt.Errorf("extractSingleFileLength failure: %w", err)
 		}
+
 		filePath := []string{entryName}
+
 		fileList = append(fileList, NewFileDict(length, filePath))
 	} else {
 		return nil, fmt.Errorf("malformed data")

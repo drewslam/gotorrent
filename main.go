@@ -133,5 +133,6 @@ func main() {
 		fmt.Printf("unsupported scheme: %s\n", ur.Scheme)
 	}
 
+	tor.PrintMetadata()
 	fmt.Printf("rs: %v\n", rs)
 }
