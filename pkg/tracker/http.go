@@ -12,35 +12,44 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/drewslam/gotorrent/pkg/bcodec"
 )
 
 // URL Processer
-func (r *Request) URL(announce string) string {
-	port := strconv.FormatUint(uint64(r.Peer.Port), 10)
-	uploaded := strconv.FormatUint(r.Uploaded, 10)
-	downloaded := strconv.FormatUint(r.Downloaded, 10)
-	left := strconv.FormatUint(r.Left, 10)
-	peerId := EscapeBytes(r.Peer.ID[:])
+func (r *Request) URL(announce string) (string, error) {
 	infoHash := EscapeBytes(r.InfoHash[:])
+	peerId := EscapeBytes(r.Peer.ID[:])
+	uploaded := strconv.FormatUint(r.Uploaded, 10)
+	left := strconv.FormatUint(r.Left, 10)
+	downloaded := strconv.FormatUint(r.Downloaded, 10)
+	event, err := r.Event.String()
+	if err != nil {
+		return "", fmt.Errorf("EventString failure: %w", err)
+	}
+	port := strconv.FormatUint(uint64(r.Peer.Port), 10)
 	return announce + "?info_hash=" + infoHash +
 		"&peer_id=" + peerId +
 		"&uploaded=" + uploaded +
-		"&downloaded=" + downloaded +
 		"&left=" + left +
-		"&event=" + r.Event +
+		"&downloaded=" + downloaded +
+		"&event=" + event +
 		"&compact=1" +
-		"&port=" + port
+		"&port=" + port, nil
 }
 
-func (r *Request) FetchHttpResponse(announce string) (*Response, error) {
-	ur := r.URL(announce)
+func (r *Request) HttpAnnounce(announce *url.URL) (*Response, error) {
+	ur, err := r.URL(announce.String())
+	if err != nil {
+		return nil, fmt.Errorf("URL failure: %w", err)
+	}
 
 	resp, err := http.Get(ur)
 	if err != nil {
-		return nil, fmt.Errorf("GET request failed: %v", err)
+		return nil, fmt.Errorf("GET request failed: %v",err)
 	}
 	defer resp.Body.Close()
 
@@ -99,4 +108,12 @@ func extractPeerList(node bcodec.Node) []*Peer {
 		}
 	}
 	return peerList
+}
+
+func EscapeBytes(data []byte) string {
+	var res strings.Builder
+	for _, d := range data {
+		res.WriteString(fmt.Sprintf("%%%02X", d))
+	}
+	return res.String()
 }

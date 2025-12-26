@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/url"
 )
 
 type UDPTrackerConn struct {
@@ -61,10 +62,9 @@ func ParseAnnounceResponse(response []byte) (*AnnounceResponse, error) {
 	leechers := binary.BigEndian.Uint32(response[12:16])
 	seeders := binary.BigEndian.Uint32(response[16:20])
 
-
 	peers := response[20:]
 	numPeers := len(peers) / 6
-	peerList := make([]*Peer, numPeers)
+	peerList := make([]*Peer, 0, numPeers)
 
 	for i := range numPeers {
 		offset := 6 * i
@@ -111,7 +111,7 @@ func BuildAnnounceRequest(connID uint64, trx uint32, p *AnnounceParams) ([]byte,
 }
 
 func UDPConnect(conn *net.UDPConn) (*UDPTrackerConn, error) {
-	trx := NewTransactionID()
+	trx := NewUint32()
 
 	connReq := connectRequest(trx)
 
@@ -133,4 +133,85 @@ func UDPConnect(conn *net.UDPConn) (*UDPTrackerConn, error) {
 	}
 
 	return &UDPTrackerConn{ConnID: connID, Transaction: trx}, nil
+}
+
+func resolveRemoteAddr(announce *url.URL) (*net.UDPAddr, error) {
+	remoteHost := announce.Hostname()
+	remotePort := announce.Port()
+
+	remoteAddr, err := net.ResolveUDPAddr("udp", remoteHost+":"+remotePort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve udp address: %v", err)
+	}
+
+	return remoteAddr, nil
+}
+
+func (r *Request) UdpAnnounce(announce *url.URL) (*Response, error) {
+	remoteAddr, err := resolveRemoteAddr(announce)
+	if err != nil {
+		return nil, fmt.Errorf("resolveRemoteAddr failure: %w", err)
+	}
+
+	conn, err := net.DialUDP("udp", nil, remoteAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial udp address: %v", err)
+	}
+	defer conn.Close()
+
+	response, err := UDPConnect(conn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to udp network: %v", err)
+	}
+
+	announceTransactionId := NewUint32()
+
+	event, err := r.Event.Uint32()
+	if err != nil {
+		return nil, fmt.Errorf("invalid event value")
+	}
+
+	params := &AnnounceParams{
+		InfoHash:   r.InfoHash,
+		PeerID:     r.Peer.ID,
+		Downloaded: r.Downloaded,
+		Left:       r.Left,
+		Uploaded:   r.Uploaded,
+		Event:      event,
+		IPOverride: 0,
+		Key:        r.Key,
+		NumWant:    -1,
+		Port:       r.Peer.Port,
+	}
+
+	announceRequest, err := BuildAnnounceRequest(response.ConnID, announceTransactionId, params)
+	if err != nil {
+		return nil, fmt.Errorf("BuildAnnounceRequest failure: %w", err)
+	}
+
+	_, err = conn.Write(announceRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write to UDP server: %v", err)
+	}
+
+	responseBuffer := make([]byte, 1024)
+	responseLen, err := conn.Read(responseBuffer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from UDP source: %v", err)
+	}
+
+	announceResponse, err := ParseAnnounceResponse(responseBuffer[:responseLen])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode announce response: %v", err)
+	}
+
+	if announceTransactionId != announceResponse.TransactionID {
+		return nil, fmt.Errorf("mismatched transaction IDs")
+	}
+
+	return &Response{
+		Interval:    uint64(announceResponse.Interval),
+		PeerDict:    announceResponse.Peers,
+		UdpResponse: announceResponse,
+	}, nil
 }

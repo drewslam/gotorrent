@@ -8,7 +8,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/url"
 	"os"
 
@@ -34,8 +33,6 @@ func DecodeTorrentFile(file []byte) (*torrent.Torrent, error) {
 }
 
 func main() {
-	sessionID := tracker.NewTransactionID()
-
 	args := os.Args
 	rawBytes, err := os.ReadFile(args[1])
 	if err != nil {
@@ -54,6 +51,8 @@ func main() {
 
 	req := tracker.NewRequest(sum, peer, fileSize)
 	announce := tor.Announce[0]
+
+	// rs, err := req.Announce(announce)
 	ur, err := url.Parse(announce)
 	if err != nil {
 		log.Fatalf("invalid announce url: %v", err)
@@ -62,70 +61,15 @@ func main() {
 	var rs *tracker.Response
 	switch ur.Scheme {
 	case "http", "https":
-		rs, err = req.FetchHttpResponse(announce)
+		rs, err = req.HttpAnnounce(ur)
 		if err != nil {
 			log.Fatalf("failed to receive http response: %v", err)
 		}
 	case "udp":
-		// rs, err = req.FetchUdpResponse(ur)
-		remoteHost := ur.Hostname()
-		remotePort := ur.Port()
-		remoteAddr, err := net.ResolveUDPAddr("udp", remoteHost+":"+remotePort)
+		rs, err = req.UdpAnnounce(ur)
 		if err != nil {
-			log.Fatalf("failed to resolve udp address: %v", err)
+			log.Fatalf("failed to receive udp response: %v", err)
 		}
-
-		conn, err := net.DialUDP("udp", nil, remoteAddr)
-		if err != nil {
-			log.Fatalf("failed to dial udp address: %v", err)
-		}
-		defer conn.Close()
-
-		response, err := tracker.UDPConnect(conn)
-		if err != nil {
-			log.Fatalf("failed to connect to udp network: %v", err)
-		}
-
-		annTrxID := tracker.NewTransactionID()
-
-		udpAnn := &tracker.AnnounceParams{
-			InfoHash:   sum,
-			PeerID:     peer.ID,
-			Downloaded: req.Downloaded,
-			Left:       req.Left,
-			Uploaded:   req.Uploaded,
-			Event:      0,
-			IPOverride: 0,
-			Key:        sessionID,
-			NumWant:    -1,
-			Port:       uint16(req.Peer.Port),
-		}
-
-		announceRequest, err := tracker.BuildAnnounceRequest(response.ConnID, annTrxID, udpAnn)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = conn.Write(announceRequest)
-		if err != nil {
-			log.Fatalf("failed to write to UDP server: %v", err)
-		}
-
-		annRes := make([]byte, 1024)
-		resLen, err := conn.Read(annRes)
-		if err != nil {
-			log.Fatalf("failed to read from UDP source: %v", err)
-		}
-
-		announceResponse, err := tracker.ParseAnnounceResponse(annRes[:resLen])
-		if err != nil {
-			log.Fatalf("failed to decode announce response: %v", err)
-		}
-
-		if annTrxID != announceResponse.TransactionID {
-			log.Fatal("mismatched transaction ID")
-		}
-
 
 	case "":
 		fmt.Println("no announce scheme detected")
@@ -134,5 +78,7 @@ func main() {
 	}
 
 	tor.PrintMetadata()
-	fmt.Printf("rs: %v\n", rs)
+	fmt.Printf("Peers: %d\n", len(rs.PeerDict))
+	fmt.Printf("Interval: %ds\n", rs.Interval)
+	fmt.Printf("Seeders: %d, Leechers :%d\n", rs.UdpResponse.Seeders, rs.UdpResponse.Leechers)
 }

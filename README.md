@@ -3,7 +3,7 @@
 A BitTorrent library for Go focused on feature-completeness and low resource usage.
 
 [![img](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![img](https://img.shields.io/badge/Go-%3E%3D%201.22-blue)](https://go.dev/)
+[![img](https://img.shields.io/badge/Go-%3E%3D%201.23-blue)](https://go.dev/)
 
 ## Development Status
 
@@ -61,7 +61,7 @@ This library is in **early development**. Core components (bencode, metadata par
 
     go get github.com/drewslam/gotorrent
 
-Requires Go 1.22 or later.
+Requires Go 1.23 or later.
 
 ## Usage
 

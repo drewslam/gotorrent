@@ -12,9 +12,10 @@ import (
 
 // Response
 type Response struct {
-	Reason   string
-	Interval uint64
-	PeerDict []*Peer
+	Reason      string
+	Interval    uint64
+	PeerDict    []*Peer
+	UdpResponse *AnnounceResponse
 }
 
 func NewResponse(data []*bcodec.BDictEntry) *Response {
@@ -45,4 +46,3 @@ func NewResponse(data []*bcodec.BDictEntry) *Response {
 		PeerDict: peerList,
 	}
 }
-

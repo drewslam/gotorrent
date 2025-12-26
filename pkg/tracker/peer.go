@@ -1,5 +1,5 @@
 /*
- * title: gotorrent-tracker
+ * title: gotorrent-tracker peer
  * author: Andrew Souza
  * GPLv3
  */
