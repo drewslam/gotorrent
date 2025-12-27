@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -41,7 +42,7 @@ func (r *Request) URL(announce string) (string, error) {
 		"&port=" + port, nil
 }
 
-func (r *Request) HttpAnnounce(announce *url.URL) (*Response, error) {
+func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
 	ur, err := r.URL(announce.String())
 	if err != nil {
 		return nil, fmt.Errorf("URL failure: %w", err)
@@ -81,7 +82,7 @@ func DecodeHTTPResponse(resp *http.Response) (*Response, error) {
 }
 
 func extractInterval(node bcodec.Node) uint64 {
-	res := uint64(0)
+	res := uint64(1800)
 	if a, ok := bcodec.AsValueNode(node); ok {
 		res = uint64(a.GetValue().Big_ival)
 	}
@@ -93,21 +94,24 @@ func extractPeerList(node bcodec.Node) []*Peer {
 	if a, ok := bcodec.AsValueNode(node); ok {
 		nv := a.GetValue().Strval
 		np := len(nv) / 6
-		var nodeList [][6]byte
+		peerList = make([]*Peer, 0, np)
 		for i := range np {
 			off := i * 6
-			var temp [6]byte
-			copy(temp[:], nv[off:off+6])
-			nodeList = append(nodeList, temp)
-		}
-		for _, n := range nodeList {
-			host := net.IP(n[0:4])
-			port := binary.BigEndian.Uint16(n[4:6])
-			peer := NewPeer(host, port)
-			peerList = append(peerList, peer)
+			ip := net.IPv4(nv[off], nv[off+1], nv[off+2], nv[off+3])
+			port := binary.BigEndian.Uint16(nv[off+4:off+6])
+			peerList = append(peerList, NewPeer(ip, port))
 		}
 	}
 	return peerList
+}
+
+func extractUint32(node bcodec.Node) uint32 {
+	if a, ok := bcodec.AsValueNode(node); ok {
+		if a.GetValue().Big_ival >= 0 && a.GetValue().Big_ival <= math.MaxUint32 {
+			return uint32(a.GetValue().Big_ival)
+		}
+	}
+	return 0
 }
 
 func EscapeBytes(data []byte) string {

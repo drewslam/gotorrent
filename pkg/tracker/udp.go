@@ -71,7 +71,7 @@ func ParseAnnounceResponse(response []byte) (*AnnounceResponse, error) {
 		ip := net.IPv4(peers[offset], peers[offset+1], peers[offset+2], peers[offset+3])
 		port := binary.BigEndian.Uint16(peers[offset+4 : offset+6])
 
-		peerList = append(peerList, &Peer{IP: ip, Port: port})
+		peerList = append(peerList, NewPeer(ip, port))
 	}
 
 	return &AnnounceResponse{
@@ -80,6 +80,7 @@ func ParseAnnounceResponse(response []byte) (*AnnounceResponse, error) {
 		Interval:      interval,
 		Leechers:      leechers,
 		Seeders:       seeders,
+		Peers:         peerList,
 	}, nil
 }
 
@@ -147,7 +148,7 @@ func resolveRemoteAddr(announce *url.URL) (*net.UDPAddr, error) {
 	return remoteAddr, nil
 }
 
-func (r *Request) UdpAnnounce(announce *url.URL) (*Response, error) {
+func (r *Request) udpAnnounce(announce *url.URL) (*Response, error) {
 	remoteAddr, err := resolveRemoteAddr(announce)
 	if err != nil {
 		return nil, fmt.Errorf("resolveRemoteAddr failure: %w", err)
@@ -210,8 +211,9 @@ func (r *Request) UdpAnnounce(announce *url.URL) (*Response, error) {
 	}
 
 	return &Response{
-		Interval:    uint64(announceResponse.Interval),
-		PeerDict:    announceResponse.Peers,
-		UdpResponse: announceResponse,
+		Interval: uint64(announceResponse.Interval),
+		Peers:    announceResponse.Peers,
+		Seeders:  announceResponse.Seeders,
+		Leechers: announceResponse.Leechers,
 	}, nil
 }
