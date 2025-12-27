@@ -44,41 +44,22 @@ func main() {
 		log.Fatalf("failed to decode torrent file: %v", err)
 	}
 
-	fileSize := tor.FileSize()
-	sum := tor.InfoHash()
-
 	peer := tracker.NewPeer()
 
-	req := tracker.NewRequest(sum, peer, fileSize)
+	req := tracker.NewRequest(tor.InfoHash(), peer, tor.FileSize())
 	announce := tor.Announce[0]
 
-	// rs, err := req.Announce(announce)
 	ur, err := url.Parse(announce)
 	if err != nil {
 		log.Fatalf("invalid announce url: %v", err)
 	}
-
-	var rs *tracker.Response
-	switch ur.Scheme {
-	case "http", "https":
-		rs, err = req.HttpAnnounce(ur)
-		if err != nil {
-			log.Fatalf("failed to receive http response: %v", err)
-		}
-	case "udp":
-		rs, err = req.UdpAnnounce(ur)
-		if err != nil {
-			log.Fatalf("failed to receive udp response: %v", err)
-		}
-
-	case "":
-		fmt.Println("no announce scheme detected")
-	default:
-		fmt.Printf("unsupported scheme: %s\n", ur.Scheme)
+	rs, err := req.Announce(ur)
+	if err != nil {
+		log.Fatalf("Announce failure: %v", err)
 	}
 
 	tor.PrintMetadata()
-	fmt.Printf("Peers: %d\n", len(rs.PeerDict))
+	fmt.Printf("Peers: %d\n", len(rs.Peers))
 	fmt.Printf("Interval: %ds\n", rs.Interval)
-	fmt.Printf("Seeders: %d, Leechers :%d\n", rs.UdpResponse.Seeders, rs.UdpResponse.Leechers)
+	fmt.Printf("Seeders: %d, Leechers: %d\n", rs.Seeders, rs.Leechers)
 }
