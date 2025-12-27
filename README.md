@@ -86,9 +86,10 @@ Requires Go 1.23 or later.
     // Contact tracker
     peer := tracker.NewPeer()
     req := tracker.NewRequest(hash, peer, tor.FileSize())
-    response, _ := req.FetchHttpResponse(tor.Announce[0])
+    url, __ := url.Parse(tor.Announce[0])
+    response, _ := req.Announce(url)
 
-    // response.PeerDict contains available peers
+    // response.Peers contains available peers
     // (connecting to peers not yet implemented)
 
 ## Design Goals
