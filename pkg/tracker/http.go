@@ -22,8 +22,8 @@ import (
 
 // URL Processer
 func (r *Request) URL(announce string) (string, error) {
-	infoHash := EscapeBytes(r.InfoHash[:])
-	peerId := EscapeBytes(r.Peer.ID[:])
+	infoHash := escapeBytes(r.InfoHash[:])
+	peerId := escapeBytes(r.Peer.ID[:])
 	uploaded := strconv.FormatUint(r.Uploaded, 10)
 	left := strconv.FormatUint(r.Left, 10)
 	downloaded := strconv.FormatUint(r.Downloaded, 10)
@@ -50,11 +50,11 @@ func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
 
 	resp, err := http.Get(ur)
 	if err != nil {
-		return nil, fmt.Errorf("GET request failed: %v",err)
+		return nil, fmt.Errorf("GET request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
-	rs, err := DecodeHTTPResponse(resp)
+	rs, err := decodeHTTPResponse(resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode tracker response: %v", err)
 	}
@@ -62,7 +62,7 @@ func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
 	return rs, nil
 }
 
-func DecodeHTTPResponse(resp *http.Response) (*Response, error) {
+func decodeHTTPResponse(resp *http.Response) (*Response, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
@@ -98,7 +98,7 @@ func extractPeerList(node bcodec.Node) []*Peer {
 		for i := range np {
 			off := i * 6
 			ip := net.IPv4(nv[off], nv[off+1], nv[off+2], nv[off+3])
-			port := binary.BigEndian.Uint16(nv[off+4:off+6])
+			port := binary.BigEndian.Uint16(nv[off+4 : off+6])
 			peerList = append(peerList, NewPeer(ip, port))
 		}
 	}
@@ -114,7 +114,7 @@ func extractUint32(node bcodec.Node) uint32 {
 	return 0
 }
 
-func EscapeBytes(data []byte) string {
+func escapeBytes(data []byte) string {
 	var res strings.Builder
 	for _, d := range data {
 		res.WriteString(fmt.Sprintf("%%%02X", d))

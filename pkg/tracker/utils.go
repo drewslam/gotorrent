@@ -15,6 +15,7 @@ const DefaultPort uint16 = 6881
 const IdPrefix string = "DSGT01"
 
 type Event int
+
 const (
 	EventStarted Event = iota
 	EventStopped
