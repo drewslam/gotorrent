@@ -3,7 +3,7 @@
 A BitTorrent library for Go focused on feature-completeness and low resource usage.
 
 [![img](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![img](https://img.shields.io/badge/Go-%3E%3D%201.23-blue)](https://go.dev/)
+[![img](https://img.shields.io/badge/Go-%3E%3D%201.22-blue)](https://go.dev/)
 
 ## Development Status
 
@@ -19,13 +19,20 @@ This library is in **early development**. Core components (bencode, metadata par
 -   ✅ **HTTP/HTTPS trackers** - Complete announce protocol
 -   ✅ **UDP trackers** - Connect and announce implementation
 -   ✅ **Peer discovery** - Get peer lists from trackers
+-   ✅ **Protocol abstraction** - Single interface for HTTP and UDP trackers
 
 ### Limitations
 
--   Only supports compact peer format (not dictionary format)
 -   No retry logic or timeout handling
--   Response types differ between HTTP/UDP (being unified)
--   Single-threaded tracker communication
+-   No periodic re-announce scheduling
+-   No connection pooling or concurrent tracker requests
+
+### What You Can Do Today
+-   Parse any .torrent file (single or multi-file)
+-   Calculate info hashes for tracker communication
+-   Announce to HTTP/S and UDP trackers
+-   Retrieve lists of peers from the swarm
+-   Get swarm statistics (seeders, leechers, re-announce interval)
 
 ### Not Yet Implemented
 
@@ -61,7 +68,7 @@ This library is in **early development**. Core components (bencode, metadata par
 
     go get github.com/drewslam/gotorrent
 
-Requires Go 1.23 or later.
+Requires Go 1.22 or later.
 
 ## Usage
 
@@ -86,11 +93,13 @@ Requires Go 1.23 or later.
     // Contact tracker
     peer := tracker.NewPeer()
     req := tracker.NewRequest(hash, peer, tor.FileSize())
-    url, __ := url.Parse(tor.Announce[0])
+    url, _ := url.Parse(tor.Announce[0])
     response, _ := req.Announce(url)
 
     // response.Peers contains available peers
-    // (connecting to peers not yet implemented)
+    fmt.Printf("Found %d peers\n", len(response.Peers))
+    fmt.Printf("Re-announce in %d seconds\n", response.Interval)
+    fmt.Printf("Swarm: %d seeders, %d leechers\n", response.Seeders, response.Leechers)
 
 ## Design Goals
 
@@ -103,9 +112,10 @@ Requires Go 1.23 or later.
 
 ### Current Focus
 
--   Unifying HTTP/UDP response types
+-   ~~Unifying HTTP/UDP response types~~ ✅ Complete
 -   Implementing peer wire protocol
--   Building high-level client API
+-   Building piece verification logic
+-   Adding test coverage
 
 ## License
 
