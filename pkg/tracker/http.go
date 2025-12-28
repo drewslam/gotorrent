@@ -20,6 +20,26 @@ import (
 	"github.com/drewslam/gotorrent/pkg/bcodec"
 )
 
+func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
+	ur, err := r.URL(announce.String())
+	if err != nil {
+		return nil, fmt.Errorf("URL failure: %w", err)
+	}
+
+	resp, err := http.Get(ur)
+	if err != nil {
+		return nil, fmt.Errorf("GET request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	rs, err := decodeHTTPResponse(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode tracker response: %v", err)
+	}
+
+	return rs, nil
+}
+
 // URL Processer
 func (r *Request) URL(announce string) (string, error) {
 	infoHash := escapeBytes(r.InfoHash[:])
@@ -40,26 +60,6 @@ func (r *Request) URL(announce string) (string, error) {
 		"&event=" + event +
 		"&compact=1" +
 		"&port=" + port, nil
-}
-
-func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
-	ur, err := r.URL(announce.String())
-	if err != nil {
-		return nil, fmt.Errorf("URL failure: %w", err)
-	}
-
-	resp, err := http.Get(ur)
-	if err != nil {
-		return nil, fmt.Errorf("GET request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	rs, err := decodeHTTPResponse(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode tracker response: %v", err)
-	}
-
-	return rs, nil
 }
 
 func decodeHTTPResponse(resp *http.Response) (*Response, error) {
