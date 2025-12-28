@@ -33,6 +33,17 @@ type BNode struct {
 	Len  uint32
 }
 
+func NewBNode(tipe NType, off uint32) (*BNode, error) {
+	if tipe < VALUE || tipe > maxNType {
+		return nil, fmt.Errorf("invalid type passed to NewBNode: %d", tipe)
+	}
+	return &BNode{
+		Type: tipe,
+		Off:  off,
+		Len:  0,
+	}, nil
+}
+
 func (n *BNode) GetType() NType {
 	return n.Type
 }
@@ -47,17 +58,6 @@ func (n *BNode) GetLength() uint32 {
 
 func (n *BNode) SetLength(length uint32) {
 	n.Len = length
-}
-
-func NewBNode(tipe NType, off uint32) (*BNode, error) {
-	if tipe < VALUE || tipe > maxNType {
-		return nil, fmt.Errorf("invalid type passed to NewBNode: %d", tipe)
-	}
-	return &BNode{
-		Type: tipe,
-		Off:  off,
-		Len:  0,
-	}, nil
 }
 
 // ValueNode interface
@@ -84,7 +84,6 @@ type ListNode interface {
 }
 
 // Concrete implementations
-
 // BValueNode implements ValueNode
 type BValueNode struct {
 	BNode

@@ -18,6 +18,10 @@ type BEncoder struct {
 	Out io.Writer
 }
 
+type bufferWriter struct {
+	data *[]byte
+}
+
 func NewBEncoder(t any) (*BEncoder, error) {
 	switch va := t.(type) {
 	case *os.File:
@@ -29,25 +33,6 @@ func NewBEncoder(t any) (*BEncoder, error) {
 	default:
 		return nil, fmt.Errorf("unsupported type passed to NewBEncoder: %T", t)
 	}
-}
-
-type bufferWriter struct {
-	data *[]byte
-}
-
-func (b *bufferWriter) Write(p []byte) (int, error) {
-	*b.data = append(*b.data, p...)
-	return len(p), nil
-}
-
-func (b *BEncoder) BeginDict() error {
-	_, err := b.Out.Write([]byte("d"))
-	return err
-}
-
-func (b *BEncoder) BeginList() error {
-	_, err := b.Out.Write([]byte("l"))
-	return err
 }
 
 func (b *BEncoder) Write(t any) error {
@@ -73,6 +58,21 @@ func (b *BEncoder) Write(t any) error {
 	default:
 		return fmt.Errorf("unsupported type: %T", va)
 	}
+}
+
+func (b *bufferWriter) Write(p []byte) (int, error) {
+	*b.data = append(*b.data, p...)
+	return len(p), nil
+}
+
+func (b *BEncoder) BeginDict() error {
+	_, err := b.Out.Write([]byte("d"))
+	return err
+}
+
+func (b *BEncoder) BeginList() error {
+	_, err := b.Out.Write([]byte("l"))
+	return err
 }
 
 func (b *BEncoder) End() error {
