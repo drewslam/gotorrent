@@ -76,16 +76,13 @@ Requires Go 1.22 or later.
 
     // Example of what works today
     import (
-        "github.com/drewslam/gotorrent/pkg/bcodec"
         "github.com/drewslam/gotorrent/pkg/torrent"
         "github.com/drewslam/gotorrent/pkg/tracker"
     )
 
     // Parse a torrent file
     data, _ := os.ReadFile("example.torrent")
-    decoder, _ := bcodec.NewBDecoder(data, false, 0)
-    dict, _ := decoder.DecodeDict()
-    tor, _ := torrent.ParseMetadata(dict, data)
+    tor, _ := torrent.DecodeTorrentFile(data)
 
     // Get info hash
     hash := tor.InfoHash()
