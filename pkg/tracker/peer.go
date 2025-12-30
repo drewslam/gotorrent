@@ -22,8 +22,8 @@ func NewPeer(t ...any) *Peer {
 	var id [20]byte
 	var ip net.IP
 	port := DefaultPort
-	copy(id[:6], []byte(IdPrefix))
-	rand.Read(id[6:])
+	copy(id[:len(IdPrefix)], []byte(IdPrefix))
+	rand.Read(id[len(IdPrefix):])
 
 	for _, arg := range t {
 		if a, ok := arg.(net.IP); ok {

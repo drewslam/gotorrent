@@ -12,7 +12,7 @@ import (
 )
 
 const DefaultPort uint16 = 6881
-const IdPrefix string = "DSGT01"
+const IdPrefix string = "-DS0001-"
 
 type Event int
 
