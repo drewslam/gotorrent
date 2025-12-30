@@ -76,7 +76,7 @@ func (r *Request) udpAnnounce(announce *url.URL) (*Response, error) {
 		Port:       r.Peer.Port,
 	}
 
-	announceRequest, err := BuildAnnounceRequest(response.ConnID, announceTransactionId, params)
+	announceRequest, err := buildAnnounceRequest(response.ConnID, announceTransactionId, params)
 	if err != nil {
 		return nil, fmt.Errorf("BuildAnnounceRequest failure: %w", err)
 	}
@@ -92,7 +92,7 @@ func (r *Request) udpAnnounce(announce *url.URL) (*Response, error) {
 		return nil, fmt.Errorf("failed to read from UDP source: %v", err)
 	}
 
-	announceResponse, err := ParseAnnounceResponse(responseBuffer[:responseLen])
+	announceResponse, err := parseAnnounceResponse(responseBuffer[:responseLen])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode announce response: %v", err)
 	}
@@ -112,7 +112,7 @@ func (r *Request) udpAnnounce(announce *url.URL) (*Response, error) {
 func UDPConnect(conn *net.UDPConn) (*UDPTrackerConn, error) {
 	trx := NewUint32()
 
-	connReq := connectRequest(trx)
+	connReq := buildConnectRequest(trx)
 
 	if _, err := conn.Write(connReq); err != nil {
 		return nil, fmt.Errorf("failed to write to UDP server: %v", err)
@@ -134,7 +134,7 @@ func UDPConnect(conn *net.UDPConn) (*UDPTrackerConn, error) {
 	return &UDPTrackerConn{ConnID: connID, Transaction: trx}, nil
 }
 
-func connectRequest(trx uint32) []byte {
+func buildConnectRequest(trx uint32) []byte {
 	connReq := make([]byte, 0, 16)
 	connReq = binary.BigEndian.AppendUint64(connReq, 0x41727101980)
 	connReq = binary.BigEndian.AppendUint32(connReq, 0)
@@ -154,7 +154,7 @@ func resolveRemoteAddr(announce *url.URL) (*net.UDPAddr, error) {
 	return remoteAddr, nil
 }
 
-func BuildAnnounceRequest(connID uint64, trx uint32, p *AnnounceParams) ([]byte, error) {
+func buildAnnounceRequest(connID uint64, trx uint32, p *AnnounceParams) ([]byte, error) {
 	req := make([]byte, 0, 98)
 	req = binary.BigEndian.AppendUint64(req, connID)
 	req = binary.BigEndian.AppendUint32(req, 1)
@@ -181,7 +181,7 @@ func BuildAnnounceRequest(connID uint64, trx uint32, p *AnnounceParams) ([]byte,
 	return req, nil
 }
 
-func ParseAnnounceResponse(response []byte) (*AnnounceResponse, error) {
+func parseAnnounceResponse(response []byte) (*AnnounceResponse, error) {
 	if len(response) < 20 {
 		return nil, fmt.Errorf("invalid response length: %d", len(response))
 	}

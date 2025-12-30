@@ -21,7 +21,7 @@ import (
 )
 
 func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
-	ur, err := r.URL(announce.String())
+	ur, err := r.buildURL(announce.String())
 	if err != nil {
 		return nil, fmt.Errorf("URL failure: %w", err)
 	}
@@ -41,7 +41,7 @@ func (r *Request) httpAnnounce(announce *url.URL) (*Response, error) {
 }
 
 // URL Processer
-func (r *Request) URL(announce string) (string, error) {
+func (r *Request) buildURL(announce string) (string, error) {
 	infoHash := escapeBytes(r.InfoHash[:])
 	peerId := escapeBytes(r.Peer.ID[:])
 	uploaded := strconv.FormatUint(r.Uploaded, 10)
