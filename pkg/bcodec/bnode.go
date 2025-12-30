@@ -1,8 +1,11 @@
 /*
  *
- *  title: bencode-go
+ *  title: gotorrent bencode bnode
  *  author: Andrew Souza
  *  GPLv3
+ *
+ *  The bencode parser design for this library was influenced by the implementation in libktorrent from the KDE project.
+ *  https://github.com/kde/libktorrent
  *
  */
 package bcodec
@@ -234,6 +237,7 @@ func AsListNode(node Node) (ListNode, bool) {
 }
 
 // Visitor pattern for traversing nodes
+// Currently unused but could be built upon for future debugging
 type NodeVisitor interface {
 	VisitValue(node ValueNode) error
 	VisitDict(node DictNode) error

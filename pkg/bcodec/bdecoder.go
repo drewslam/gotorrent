@@ -1,8 +1,11 @@
 /*
  *
- *  title: bencode-go
+ *  title: gotorrent bencode bdecoder
  *  author: Andrew Souza
  *  GPLv3
+ *
+ *  The bencode parser design for this library was influenced by the implementation in libktorrent from the KDE project.
+ *  https://github.com/kde/libktorrent
  *
  */
 package bcodec
