@@ -68,7 +68,7 @@ This library is in **early development**. Core components (bencode, metadata par
 
     go get github.com/drewslam/gotorrent
 
-Requires Go 1.22 or later.
+Requires Go 1.23 or later.
 
 ## Usage
 
