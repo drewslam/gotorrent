@@ -9,6 +9,7 @@ package tracker
 import (
 	"crypto/rand"
 	"net"
+	"strconv"
 )
 
 // Peer
@@ -39,4 +40,14 @@ func NewPeer(t ...any) *Peer {
 		IP:   ip,
 		Port: port,
 	}
+}
+
+func (p *Peer) Address() string {
+	if p.IP == nil {
+		return ""
+	}
+
+	addr := p.IP.String()
+	port := strconv.Itoa(int(p.Port))
+	return addr+":"+port
 }
