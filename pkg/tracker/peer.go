@@ -49,5 +49,5 @@ func (p *Peer) Address() string {
 
 	addr := p.IP.String()
 	port := strconv.Itoa(int(p.Port))
-	return addr+":"+port
+	return net.JoinHostPort(addr, port)
 }
