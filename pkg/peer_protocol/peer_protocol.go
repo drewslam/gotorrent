@@ -8,6 +8,8 @@
 package peer_protocol
 
 import (
+	"fmt"
+	"bytes"
 	"net"
 
 	"github.com/drewslam/gotorrent/pkg/torrent"
@@ -49,7 +51,7 @@ type Message struct {
 
 type PeerConn struct {
 	Conn net.Conn
-	Peer *tracker.Peer
+	PeerID [20]byte
 
 	ClientState *PeerState
 	PeerState   *PeerState
@@ -64,27 +66,60 @@ func NewPeerState() *PeerState {
 	}
 }
 
-func NewHandshake(req *tracker.Request) *Handshake {
+func NewHandshake(info [20]byte, peerID [20]byte) *Handshake {
 	pstr := [19]byte{}
 	copy(pstr[:], "BitTorrent protocol")
 	return &Handshake{
 		Pstrlen:  19,
 		Pstr:     pstr,
 		Reserved: [8]byte{0},
-		InfoHash: req.InfoHash,
-		PeerID:   req.Peer.ID,
+		InfoHash: info,
+		PeerID:   peerID,
 	}
 }
 
-func NewPeerConn(conn net.Conn, peer *tracker.Peer, tor *torrent.Torrent) *PeerConn {
+func NewPeerConn(conn net.Conn, peerID [20]byte, tor *torrent.Torrent) *PeerConn {
 	numPieces := len(tor.Info.Pieces)
 	bitfieldSize := (numPieces + 7) / 8
 
 	return &PeerConn{
 		Conn:        conn,
-		Peer:        peer,
+		PeerID:      peerID,
 		ClientState: NewPeerState(),
 		PeerState:   NewPeerState(),
 		Bitfield:    make([]byte, bitfieldSize),
 	}
+}
+
+func (h *Handshake) Serialize() []byte {
+	buffer := bytes.NewBuffer([]byte{h.Pstrlen})
+	buffer.Write(h.Pstr[:])
+	buffer.Write(h.Reserved[:])
+	buffer.Write(h.InfoHash[:])
+	buffer.Write(h.PeerID[:])
+	return buffer.Bytes()
+}
+
+func ValidateHandshake(input []byte, expectedInfoHash [20]byte) ([20]byte, error) {
+	if len(input) != 68 {
+		return [20]byte{0}, fmt.Errorf("incorrect length handshake")
+	}
+
+	if input[0] != 0x13 {
+		return [20]byte{0}, fmt.Errorf("invalid length prefix")
+	}
+	if string(input[1:20]) != "BitTorrent protocol" {
+		return [20]byte{0}, fmt.Errorf("invalid protocol message")
+	}
+
+	var infoHash [20]byte
+	copy(infoHash[:], input[28:48])
+	if infoHash != expectedInfoHash {
+		return [20]byte{0}, fmt.Errorf("info hash mismatch")
+	}
+
+	var peerID [20]byte
+	copy(peerID[:], input[48:])
+
+	return peerID, nil
 }
