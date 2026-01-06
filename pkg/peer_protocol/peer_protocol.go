@@ -8,12 +8,12 @@
 package peer_protocol
 
 import (
-	"fmt"
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"net"
 
 	"github.com/drewslam/gotorrent/pkg/torrent"
-	"github.com/drewslam/gotorrent/pkg/tracker"
 )
 
 type MsgVal uint8
@@ -28,6 +28,7 @@ const (
 	Request
 	Piece
 	Cancel
+	MaxMsgVal = Cancel
 )
 
 type PeerState struct {
@@ -97,6 +98,21 @@ func (h *Handshake) Serialize() []byte {
 	buffer.Write(h.Reserved[:])
 	buffer.Write(h.InfoHash[:])
 	buffer.Write(h.PeerID[:])
+	return buffer.Bytes()
+}
+
+func (m *Message) Serialize() []byte {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, m.Length)
+
+	if m.Length == 0 {
+		return buffer.Bytes()
+	}
+
+	buffer.WriteByte(byte(m.ID))
+	if m.Payload != nil {
+		buffer.Write(m.Payload)
+	}
 	return buffer.Bytes()
 }
 
