@@ -7,6 +7,8 @@
 package tracker
 
 import (
+	"fmt"
+
 	"github.com/drewslam/gotorrent/pkg/bcodec"
 )
 
@@ -54,4 +56,15 @@ func NewResponse(data []*bcodec.BDictEntry) *Response {
 		Seeders:  seeders,
 		Leechers: leechers,
 	}
+}
+
+func (r *Response) PrintResponse() {
+	fmt.Printf("Peers: %d\n", len(r.Peers))
+	fmt.Printf("Interval: %ds\n", r.Interval)
+	fmt.Printf("Seeders: %d, Leechers: %d\n", r.Seeders, r.Leechers)
+}
+
+func (r *Response) PrintPeerInfo(index uint32) {
+	fmt.Printf("rs.Peers[%d].IP: %v\n", index, r.Peers[index].IP)
+	fmt.Printf("rs.Peers[%d].Port: %v\n", index, r.Peers[index].Port)
 }
