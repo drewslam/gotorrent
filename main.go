@@ -96,11 +96,29 @@ func main() {
 
 	connectedState := peer_protocol.NewPeerConn(conn, theirPeerID, tor)
 
+	// keep alive
+	ticker := time.NewTicker(time.Minute * 2)
+	defer ticker.Stop()
+	go func() {
+		for range ticker.C {
+			keepAlive := &peer_protocol.Message{Length: 0}
+			_, err := conn.Write(keepAlive.Serialize())
+			if err != nil {
+				return
+			}
+		}
+	}()
+
 	for {
 		msg, err := connectedState.ReadMsg()
 		if err != nil {
 			fmt.Printf("ReadMsg failure: %v\n", err)
 			break
+		}
+
+		err = connectedState.WriteMsgResponse(msg)
+		if err != nil {
+			fmt.Printf("WriteMsgResponse failure: %v", err)
 		}
 
 		fmt.Printf("msg sent: %v\n", msg)
