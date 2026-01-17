@@ -122,3 +122,4 @@ GPL-3.0 - See [LICENSE](LICENSE) for details.
 
 -   BitTorrent protocol specification: [BEP 0003](http://www.bittorrent.org/beps/bep_0003.html)
 -   [libktorrent](https://github.com/KDE/libktorrent) - Design influence for the bcodec package
+-   Building a BitTorrent client from the ground up in Go, by Jesse Li (https://blog.jse.li/posts/torrent/)
