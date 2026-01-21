@@ -21,6 +21,8 @@ import (
 	"github.com/drewslam/gotorrent/pkg/tracker"
 )
 
+const MaxPeerConnections uint32 = 5
+
 func main() {
 	args := os.Args
 	rawBytes, err := os.ReadFile(args[1])
@@ -80,47 +82,49 @@ func main() {
 	fmt.Printf("Interval: %ds\n", rs.Interval)
 	fmt.Printf("Seeders: %d, Leechers: %d\n", rs.Seeders, rs.Leechers)
 
-	randomIndex := uint32(rand.IntN(len(rs.Peers)))
-	rs.PrintPeerInfo(randomIndex)
+	pieceMgr := peer_protocol.NewPieceManager(tor)
 
-	handshake := peer_protocol.NewHandshake(req.InfoHash, req.Peer.ID)
+	for range MaxPeerConnections {
+		randomIndex := uint32(rand.IntN(len(rs.Peers)))
+		rs.PrintPeerInfo(randomIndex)
 
-	conn, err := net.DialTimeout("tcp", rs.Peers[randomIndex].Address(), time.Second*10)
-	if err != nil {
-		fmt.Printf("tcp connection failure: %v\n", err)
-		os.Exit(1)
-	}
-	defer conn.Close()
+		handshake := peer_protocol.NewHandshake(req.InfoHash, req.Peer.ID)
 
-	theirPeerID, err := handshake.FetchPeer(conn)
+		conn, err := net.DialTimeout("tcp", rs.Peers[randomIndex].Address(), time.Second*10)
+		if err != nil {
+			fmt.Printf("tcp connection failure: %v\n", err)
+			continue
+		}
+		defer conn.Close()
 
-	connectedState := peer_protocol.NewPeerConn(conn, theirPeerID, tor)
+		theirPeerID, err := handshake.FetchPeer(conn)
 
-	// keep alive
-	ticker := time.NewTicker(time.Minute * 2)
-	defer ticker.Stop()
-	go func() {
-		for range ticker.C {
-			keepAlive := &peer_protocol.Message{Length: 0}
-			_, err := conn.Write(keepAlive.Serialize())
+		connectedState := peer_protocol.NewPeerConn(conn, theirPeerID, pieceMgr)
+
+		// keep alive
+		ticker := time.NewTicker(time.Minute * 2)
+		defer ticker.Stop()
+		go func() {
+			for range ticker.C {
+				keepAlive := &peer_protocol.Message{Length: 0}
+				_, err := conn.Write(keepAlive.Serialize())
+				if err != nil {
+					return
+				}
+			}
+		}()
+
+		for {
+			msg, err := connectedState.ReadMsg()
 			if err != nil {
-				return
+				fmt.Printf("ReadMsg failure: %v\n", err)
+				break
+			}
+
+			err = connectedState.WriteMsgResponse(msg)
+			if err != nil {
+				fmt.Printf("WriteMsgResponse failure: %v", err)
 			}
 		}
-	}()
-
-	for {
-		msg, err := connectedState.ReadMsg()
-		if err != nil {
-			fmt.Printf("ReadMsg failure: %v\n", err)
-			break
-		}
-
-		err = connectedState.WriteMsgResponse(msg)
-		if err != nil {
-			fmt.Printf("WriteMsgResponse failure: %v", err)
-		}
-
-		fmt.Printf("msg sent: %v\n", msg)
 	}
 }

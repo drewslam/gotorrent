@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/drewslam/gotorrent/pkg/torrent"
 )
@@ -53,6 +54,13 @@ type Message struct {
 	Payload []byte
 }
 
+type PieceManager struct {
+	NumPieces  uint32
+	HavePieces []byte
+
+	mu sync.RWMutex
+}
+
 type PeerConn struct {
 	Conn   net.Conn
 	PeerID [20]byte
@@ -60,9 +68,9 @@ type PeerConn struct {
 	ClientState *PeerState
 	PeerState   *PeerState
 
-	NumPieces  uint32
-	Bitfield   []byte
-	HavePieces []byte
+	Bitfield []byte
+
+	PieceMgr *PieceManager
 }
 
 func NewPeerState() *PeerState {
@@ -84,18 +92,26 @@ func NewHandshake(info [20]byte, peerID [20]byte) *Handshake {
 	}
 }
 
-func NewPeerConn(conn net.Conn, peerID [20]byte, tor *torrent.Torrent) *PeerConn {
+func NewPieceManager(tor *torrent.Torrent) *PieceManager {
 	numPieces := uint32(len(tor.Info.Pieces))
 	bitfieldSize := (numPieces + 7) / 8
+
+	return &PieceManager{
+		NumPieces:  numPieces,
+		HavePieces: make([]byte, bitfieldSize),
+	}
+}
+
+func NewPeerConn(conn net.Conn, peerID [20]byte, pm *PieceManager) *PeerConn {
+	bitfieldSize := (pm.NumPieces + 7) / 8
 
 	return &PeerConn{
 		Conn:        conn,
 		PeerID:      peerID,
 		ClientState: NewPeerState(),
 		PeerState:   NewPeerState(),
-		NumPieces:   numPieces,
 		Bitfield:    make([]byte, bitfieldSize),
-		HavePieces:  make([]byte, bitfieldSize),
+		PieceMgr:    pm,
 	}
 }
 
@@ -213,14 +229,8 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 
 	switch msg.ID {
 	case Unchoke:
-		pieceIndex := -1
-		for i := range p.NumPieces {
-			if p.PeerHasPiece(i) && !p.WeHavePiece(i) {
-				pieceIndex = int(i)
-				break
-			}
-		}
-		if pieceIndex < 0 {
+		pieceIndex, ok := p.PieceMgr.SelectPiece(p.Bitfield)
+		if !ok {
 			return nil
 		}
 
@@ -250,6 +260,15 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 	return nil
 }
 
+func (pm *PieceManager) SelectPiece(bitfield []byte) (uint32, bool) {
+	for i := range pm.NumPieces {
+		if PeerHasPiece(bitfield, i) && !pm.WeHavePiece(i) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 func (p *PeerConn) PrepareRequest(index uint32, offset uint32) (*Message, error) {
 	payload := make([]byte, 12)
 	binary.BigEndian.PutUint32(payload[0:4], index)
@@ -263,12 +282,14 @@ func (p *PeerConn) PrepareRequest(index uint32, offset uint32) (*Message, error)
 	}, nil
 }
 
-func (p *PeerConn) PeerHasPiece(index uint32) bool {
-	return isBitInBitfield(index, p.Bitfield)
+func PeerHasPiece(bitfield []byte, index uint32) bool {
+	return isBitInBitfield(index, bitfield)
 }
 
-func (p *PeerConn) WeHavePiece(index uint32) bool {
-	return isBitInBitfield(index, p.HavePieces)
+func (pm *PieceManager) WeHavePiece(index uint32) bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return isBitInBitfield(index, pm.HavePieces)
 }
 
 func isBitInBitfield(index uint32, bf []byte) bool {
