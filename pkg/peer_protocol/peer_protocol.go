@@ -58,6 +58,8 @@ type PieceManager struct {
 	NumPieces  uint32
 	HavePieces []byte
 
+	InProgress map[uint32]bool
+
 	mu sync.RWMutex
 }
 
@@ -99,6 +101,7 @@ func NewPieceManager(tor *torrent.Torrent) *PieceManager {
 	return &PieceManager{
 		NumPieces:  numPieces,
 		HavePieces: make([]byte, bitfieldSize),
+		InProgress: make(map[uint32]bool),
 	}
 }
 
@@ -113,6 +116,60 @@ func NewPeerConn(conn net.Conn, peerID [20]byte, pm *PieceManager) *PeerConn {
 		Bitfield:    make([]byte, bitfieldSize),
 		PieceMgr:    pm,
 	}
+}
+
+func (pm *PieceManager) SelectPiece(bitfield []byte) (uint32, bool) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	for i := range pm.NumPieces {
+		if PeerHasPiece(bitfield, i) && !isBitInBitfield(i, pm.HavePieces) && !pm.InProgress[i] {
+			pm.InProgress[i] = true
+			return i, true
+		}
+	}
+
+	return 0, false
+}
+
+func (pm *PieceManager) MarkComplete(index uint32) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pm.SetPiece(index)
+
+	delete(pm.InProgress, index)
+}
+
+func (pm *PieceManager) ReleasePiece(index uint32) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	delete(pm.InProgress, index)
+}
+
+func (pm *PieceManager) IsComplete() bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	for i := range pm.NumPieces {
+		if !isBitInBitfield(i, pm.HavePieces) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (pm *PieceManager) WeHavePiece(index uint32) bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return isBitInBitfield(index, pm.HavePieces)
+}
+
+func (pm *PieceManager) SetPiece(index uint32) {
+	byteIndex := index / 8
+	bitIndex := 7 - (index % 8)
+	pm.HavePieces[byteIndex] |= (1 << bitIndex)
 }
 
 func (h *Handshake) FetchPeer(conn net.Conn) ([20]byte, error) {
@@ -133,54 +190,6 @@ func (h *Handshake) FetchPeer(conn net.Conn) ([20]byte, error) {
 	}
 
 	return theirPeerID, nil
-}
-
-func (h *Handshake) serialize() []byte {
-	buffer := bytes.NewBuffer([]byte{h.Pstrlen})
-	buffer.Write(h.Pstr[:])
-	buffer.Write(h.Reserved[:])
-	buffer.Write(h.InfoHash[:])
-	buffer.Write(h.PeerID[:])
-	return buffer.Bytes()
-}
-
-func (m *Message) Serialize() []byte {
-	buffer := new(bytes.Buffer)
-	binary.Write(buffer, binary.BigEndian, m.Length)
-
-	if m.Length == 0 {
-		return buffer.Bytes()
-	}
-
-	buffer.WriteByte(byte(m.ID))
-	if m.Payload != nil {
-		buffer.Write(m.Payload)
-	}
-	return buffer.Bytes()
-}
-
-func validateHandshake(input []byte, expectedInfoHash [20]byte) ([20]byte, error) {
-	if len(input) != 68 {
-		return [20]byte{0}, fmt.Errorf("incorrect length handshake")
-	}
-
-	if input[0] != 0x13 {
-		return [20]byte{0}, fmt.Errorf("invalid length prefix")
-	}
-	if string(input[1:20]) != "BitTorrent protocol" {
-		return [20]byte{0}, fmt.Errorf("invalid protocol message")
-	}
-
-	var infoHash [20]byte
-	copy(infoHash[:], input[28:48])
-	if infoHash != expectedInfoHash {
-		return [20]byte{0}, fmt.Errorf("info hash mismatch")
-	}
-
-	var peerID [20]byte
-	copy(peerID[:], input[48:])
-
-	return peerID, nil
 }
 
 func (p *PeerConn) ReadMsg() (*Message, error) {
@@ -260,15 +269,6 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 	return nil
 }
 
-func (pm *PieceManager) SelectPiece(bitfield []byte) (uint32, bool) {
-	for i := range pm.NumPieces {
-		if PeerHasPiece(bitfield, i) && !pm.WeHavePiece(i) {
-			return i, true
-		}
-	}
-	return 0, false
-}
-
 func (p *PeerConn) PrepareRequest(index uint32, offset uint32) (*Message, error) {
 	payload := make([]byte, 12)
 	binary.BigEndian.PutUint32(payload[0:4], index)
@@ -282,14 +282,23 @@ func (p *PeerConn) PrepareRequest(index uint32, offset uint32) (*Message, error)
 	}, nil
 }
 
-func PeerHasPiece(bitfield []byte, index uint32) bool {
-	return isBitInBitfield(index, bitfield)
+func (m *Message) Serialize() []byte {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, m.Length)
+
+	if m.Length == 0 {
+		return buffer.Bytes()
+	}
+
+	buffer.WriteByte(byte(m.ID))
+	if m.Payload != nil {
+		buffer.Write(m.Payload)
+	}
+	return buffer.Bytes()
 }
 
-func (pm *PieceManager) WeHavePiece(index uint32) bool {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return isBitInBitfield(index, pm.HavePieces)
+func PeerHasPiece(bitfield []byte, index uint32) bool {
+	return isBitInBitfield(index, bitfield)
 }
 
 func isBitInBitfield(index uint32, bf []byte) bool {
@@ -299,4 +308,37 @@ func isBitInBitfield(index uint32, bf []byte) bool {
 		return false
 	}
 	return (bf[byteIndex] & (1 << bitIndex)) != 0
+}
+
+func validateHandshake(input []byte, expectedInfoHash [20]byte) ([20]byte, error) {
+	if len(input) != 68 {
+		return [20]byte{0}, fmt.Errorf("incorrect length handshake")
+	}
+
+	if input[0] != 0x13 {
+		return [20]byte{0}, fmt.Errorf("invalid length prefix")
+	}
+	if string(input[1:20]) != "BitTorrent protocol" {
+		return [20]byte{0}, fmt.Errorf("invalid protocol message")
+	}
+
+	var infoHash [20]byte
+	copy(infoHash[:], input[28:48])
+	if infoHash != expectedInfoHash {
+		return [20]byte{0}, fmt.Errorf("info hash mismatch")
+	}
+
+	var peerID [20]byte
+	copy(peerID[:], input[48:])
+
+	return peerID, nil
+}
+
+func (h *Handshake) serialize() []byte {
+	buffer := bytes.NewBuffer([]byte{h.Pstrlen})
+	buffer.Write(h.Pstr[:])
+	buffer.Write(h.Reserved[:])
+	buffer.Write(h.InfoHash[:])
+	buffer.Write(h.PeerID[:])
+	return buffer.Bytes()
 }
