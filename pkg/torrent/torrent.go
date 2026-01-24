@@ -344,7 +344,7 @@ func extractPieces(pieces []byte) ([][20]byte, error) {
 		return nil, fmt.Errorf("invalid piece length: %d", len(pieces))
 	}
 
-	pieceCount := len(pieces)/20
+	pieceCount := len(pieces) / 20
 	pc := make([][20]byte, pieceCount)
 
 	for i := range pieceCount {

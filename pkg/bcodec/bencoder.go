@@ -225,4 +225,3 @@ func (b *BEncoder) EncodeList(items []any) error {
 
 	return b.End()
 }
-
