@@ -97,11 +97,7 @@ func DecodeTorrentFile(file []byte) (*Torrent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode torrent data: %v", err)
 	}
-	tor, err := parseMetadata(decoded, file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse torrent metadata: %v", err)
-	}
-	return tor, nil
+	return parseMetadata(decoded, file)
 }
 
 func parseMetadata(torrentFile *bcodec.BDictNode, rawBytes []byte) (*Torrent, error) {
