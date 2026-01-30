@@ -19,7 +19,7 @@ import (
 	"github.com/drewslam/gotorrent/pkg/tracker"
 )
 
-const MaxPeerConnections uint32 = 5
+const MaxPeerConnections uint32 = 50
 var ActivePeerConnections = make(map[uint32]bool, MaxPeerConnections)
 
 func main() {
@@ -48,7 +48,7 @@ func main() {
 
 	rs, err := req.Announce(ur)
 	if err != nil {
-		fmt.Printf("Announce failure: %v\n", err)
+		fmt.Printf("announce failure: %v\n", err)
 	}
 
 	if len(rs.Peers) == 0 && len(tor.Announce) > 1 {
@@ -61,7 +61,7 @@ func main() {
 
 			rs, err = req.Announce(ur)
 			if err != nil {
-				fmt.Printf("Announce failure: %v\n", err)
+				fmt.Printf("announce failure: %v\n", err)
 				continue
 			}
 
@@ -82,34 +82,31 @@ func main() {
 	fmt.Printf("Seeders: %d, Leechers: %d\n", rs.Seeders, rs.Leechers)
 
 	pieceMgr := peer_protocol.NewPieceManager(tor)
+	numToConnect := min(int(MaxPeerConnections), len(rs.Peers))
 
-	for range MaxPeerConnections {
-		if len(ActivePeerConnections) > len(rs.Peers) {
-			fmt.Printf("only %d peers available (wanted %d)\n", len(rs.Peers), MaxPeerConnections)
+	for len(ActivePeerConnections) < numToConnect {
+		var randomIndex uint32
+		found := false
+		maxAttempts := len(rs.Peers) * 2
+
+		for range maxAttempts {
+			randomIndex = uint32(rand.IntN(len(rs.Peers)))
+			if !ActivePeerConnections[randomIndex] {
+				found = true
+				break
+			}
 		}
 
-		var randomIndex uint32
-		maxAttempts := len(rs.Peers) * 2
-		attempts := 0
-
-		for {
-		randomIndex = uint32(rand.IntN(len(rs.Peers)))
-			if _, exists := ActivePeerConnections[randomIndex]; !exists {
-				break
-			}
-
-			attempts++
-			if attempts > maxAttempts {
-				fmt.Printf("failed to find unique peer after %d attempts\n", attempts)
-				break
-			}
+		if !found {
+			fmt.Printf("failed to find unique peer, stopping at %d connections\n", len(ActivePeerConnections))
+			break
 		}
 
 		rs.PrintPeerInfo(randomIndex)
 		ActivePeerConnections[randomIndex] = true
 
 		go func(peerAddr string, peerIdx uint32) {
-			pieceMgr.HandleConnection(peerAddr, peerIdx, req)
+			peer_protocol.HandleConnection(peerAddr, peerIdx, req, pieceMgr)
 		}(rs.Peers[randomIndex].Address(), randomIndex)
 	}
 
