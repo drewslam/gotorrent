@@ -65,6 +65,7 @@ func (ps *PieceState) AddBlock(offset uint32, data []byte) bool {
 
 func (ps *PieceState) NextBlockToRequest() (uint32, uint32, bool) {
 	for i := range len(ps.Blocks) {
+		fmt.Printf("Block[%d]: offset=%d Requested=%t Received=%t\n", i, ps.Blocks[i].Offset, ps.Blocks[i].Requested, ps.Blocks[i].Received)
 		if !ps.Blocks[i].Received && !ps.Blocks[i].Requested {
 			ps.Blocks[i].Requested = true
 			return ps.Blocks[i].Offset, ps.Blocks[i].Length, true

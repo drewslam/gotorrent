@@ -107,7 +107,7 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 		} else {
 			_, exists := p.PieceMgr.PcState[pieceIndex]
 			fmt.Printf("looking for next block. exists: %v\n", exists)
-			_, nextOffset, ok := p.PieceMgr.GetNextBlock(pieceIndex)
+			nextOffset, _, ok := p.PieceMgr.GetNextBlock(pieceIndex)
 			if !ok {
 				return fmt.Errorf("piece state missing for index %d", pieceIndex)
 			} else {
