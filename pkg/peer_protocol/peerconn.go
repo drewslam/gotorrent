@@ -27,7 +27,7 @@ type PeerConn struct {
 }
 
 func NewPeerConn(conn net.Conn, peerID [20]byte, pm *PieceManager) *PeerConn {
-	bitfieldSize := (pm.NumPieces + 7) / 8
+	bitfieldSize := (pm.DataMgr.NumPieces + 7) / 8
 
 	return &PeerConn{
 		Conn:        conn,
@@ -81,12 +81,12 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 
 	switch msg.ID {
 	case Unchoke:
-		pieceIndex, ok := p.PieceMgr.SelectPiece(p.Bitfield)
+		requestIndex, requestOffset, _, ok := p.PieceMgr.HandleUnchoke(p.Bitfield)
 		if !ok {
-			return nil
+			return fmt.Errorf("no block found")
 		}
 
-		newMsg, err = p.PrepareRequest(uint32(pieceIndex), 0)
+		newMsg, err = p.PieceMgr.PrepareRequest(requestIndex, requestOffset)
 		if err != nil {
 			return fmt.Errorf("PrepareRequest failure: %w", err)
 		}
@@ -94,15 +94,37 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 		p.ClientState.Interested = true
 		newMsg = NewMessageNP(Interested)
 	case Piece:
-		pieceIndex := binary.BigEndian.Uint32(msg.Payload[0:4])
-		offset := binary.BigEndian.Uint32(msg.Payload[4:8])
-		blockData := msg.Payload[8:]
-
-		fmt.Printf("received block: piece=%d offset=%d size=%d bytes\n", pieceIndex, offset, len(blockData))
-		// TODO verify hash and save data
+		pieceIndex, isComplete := p.PieceMgr.HandlePieceMessage(msg)
+		fmt.Printf("pieceIndex: %v ", pieceIndex)
+		fmt.Printf("isComplete: %v\n", isComplete)
+		if isComplete {
+			buf := p.PieceMgr.DataMgr.AssemblePiece(pieceIndex)
+			verified := p.PieceMgr.DataMgr.VerifyPiece(pieceIndex, buf)
+			newMsg, err = p.PieceMgr.FinishPiece(pieceIndex, p.Bitfield, verified)
+			if err != nil {
+				return fmt.Errorf("finishPiece failure: %w", err)
+			}
+		} else {
+			_, exists := p.PieceMgr.PcState[pieceIndex]
+			fmt.Printf("looking for next block. exists: %v\n", exists)
+			_, nextOffset, ok := p.PieceMgr.GetNextBlock(pieceIndex)
+			if !ok {
+				return fmt.Errorf("piece state missing for index %d", pieceIndex)
+			} else {
+				fmt.Printf("nextOffset: %v\n", nextOffset)
+				newMsg, err = p.PieceMgr.PrepareRequest(pieceIndex, nextOffset)
+				if err != nil {
+					return fmt.Errorf("PrepareRequest failure: %w", err)
+				}
+				fmt.Printf("newMsg: %v\n", newMsg)
+			}
+		}
 	}
 
 	if newMsg != nil {
+		fmt.Printf("newMsg.ID.String(): %v ", newMsg.ID.String())
+		fmt.Printf("len(newMsg.Payload): %v\n", len(newMsg.Payload))
+
 		_, err = p.Conn.Write(newMsg.Serialize())
 		if err != nil {
 			return fmt.Errorf("p.Conn.Write failure: %w", err)
@@ -110,13 +132,4 @@ func (p *PeerConn) WriteMsgResponse(msg *Message) error {
 	}
 
 	return nil
-}
-
-func (p *PeerConn) PrepareRequest(index uint32, offset uint32) (*Message, error) {
-	payload := make([]byte, 12)
-	binary.BigEndian.PutUint32(payload[0:4], index)
-	binary.BigEndian.PutUint32(payload[4:8], offset)
-	binary.BigEndian.PutUint32(payload[8:12], MaxBlockSize)
-
-	return NewMessageWP(13, Request, payload), nil
 }

@@ -46,6 +46,7 @@ func (m *Message) Serialize() []byte {
 	if m.Payload != nil {
 		buffer.Write(m.Payload)
 	}
+
 	return buffer.Bytes()
 }
 

@@ -44,7 +44,7 @@ func NewPeerState() *PeerState {
 	}
 }
 
-func (pm *PieceManager) HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request) {
+func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm *PieceManager) {
 	handshake := NewHandshake(req.InfoHash, req.Peer.ID)
 
 	conn, err := net.DialTimeout("tcp", peerAddr, time.Second*10)

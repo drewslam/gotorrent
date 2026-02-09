@@ -71,6 +71,7 @@ func validateHandshake(input []byte, expectedInfoHash [20]byte) ([20]byte, error
 	if input[0] != 0x13 {
 		return [20]byte{0}, fmt.Errorf("invalid length prefix")
 	}
+
 	if string(input[1:20]) != "BitTorrent protocol" {
 		return [20]byte{0}, fmt.Errorf("invalid protocol message")
 	}
