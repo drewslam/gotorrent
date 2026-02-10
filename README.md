@@ -1,18 +1,15 @@
 # gotorrent
-
 A BitTorrent library for Go focused on feature-completeness and low resource usage.
 
 [![img](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![img](https://img.shields.io/badge/Go-%3E%3D%201.23-blue)](https://go.dev/)
 
 ## Development Status
-
 This library is in **active development**. Core components (bencode, metadata parsing, tracker communication, peer protocol) are functional. File download management is currently being implemented.
 
 ## Features
 
 ### Currently Working
-
 -   ✅ **Bencode encoding/decoding** - Full support for all bencode types
 -   ✅ **Torrent metadata parsing** - Single and multi-file torrents
 -   ✅ **Info hash calculation** - Proper SHA-1 of info dictionary
@@ -36,7 +33,6 @@ This library is in **active development**. Core components (bencode, metadata pa
 -   Track download progress at the block and piece level
 
 ### Not Yet Implemented
-
 -   Complete file assembly and writing to disk
 -   Upload/seeding functionality
 -   DHT, PEX, magnet links
@@ -47,44 +43,40 @@ This library is in **active development**. Core components (bencode, metadata pa
 ## Architecture
 
 ### Packages
-
 **`pkg/bcodec`** - Bencode encoding and decoding
-
 -   Tree-based parser with typed nodes
 -   Support for all bencode types (integers, strings, lists, dictionaries)
 -   Type-safe casting and visitor pattern
 
 **`pkg/torrent`** - Torrent metadata handling
-
 -   Parse .torrent files
 -   Extract info hash, pieces, file information
 -   Support for announce-list and url-list
 
 **`pkg/tracker`** - Tracker communication
-
 -   HTTP/HTTPS tracker protocol
 -   UDP tracker protocol
 -   Peer list retrieval
 
 **`pkg/peer_protocol`** - Peer wire protocol
-
 -   Handshake negotiation and validation
--   Message encing/decoding
+-   Message encoding/decoding
 -   Peer connection state management
 -   Block-level piece state tracking
 -   Concurrent peer coordination via PieceManager
--   Thread-sage data storage with DataManager
+-   Thread-safe data storage with DataManager
 
 ## Installation
-
+```bash
     go get github.com/drewslam/gotorrent
+```
 
 Requires Go 1.23 or later.
 
 ## Usage
 
 ### Current Capabilities
-
+```go
     // Example of what works today
     import (
         "github.com/drewslam/gotorrent/pkg/torrent"
@@ -113,28 +105,27 @@ Requires Go 1.23 or later.
 
     // Peers will automatically
     // - Perform handshake
-    // - Exhchange bitfields
+    // - Exchange bitfields
     // - Request and download pieces
     // - Verify piece hashes
+```
 
 ## Design Goals
 
 1.  **Feature-complete** - Full BitTorrent protocol support
 2.  **Low resource usage** - Efficient memory and CPU utilization
-3.  **Library-first** - Clean API for building clients
+3.  **Library-first** - Clean API for building client
 4.  **Well-tested** - Comprehensive test coverage (in progress)
 
 ## Development
 
 ### Current Focus
-
 -   Completing file I/O and piece assembly
 -   Adding upload/seeding support
 -   Implementing resume capability
 -   Adding test coverage
 
 ### Architecture Notes
-
 The peer protocol implementation uses a multi-layered architecture:
 
 -   **DataManager**: Thread-sage storage for downloaded data and completion tracking
