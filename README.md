@@ -7,25 +7,22 @@ A BitTorrent library for Go focused on feature-completeness and low resource usa
 
 ## Development Status
 
-This library is in **early development**. Core components (bencode, metadata parsing, tracker communication) are functional, but the peer wire protocol and download management are not yet implemented.
+This library is in **active development**. Core components (bencode, metadata parsing, tracker communication, peer protocol) are functional. File download management is currently being implemented.
 
 ## Features
 
 ### Currently Working
 
 -   ✅ **Bencode encoding/decoding** - Full support for all bencode types
--   ✅ **Torrent file parsing** - Single and multi-file torrents
+-   ✅ **Torrent metadata parsing** - Single and multi-file torrents
 -   ✅ **Info hash calculation** - Proper SHA-1 of info dictionary
--   ✅ **HTTP/HTTPS trackers** - Complete announce protocol
+-   ✅ **HTTP/HTTPS trackers** - Full announce protocol
 -   ✅ **UDP trackers** - Connect and announce implementation
--   ✅ **Peer discovery** - Get peer lists from trackers
+-   ✅ **Peer discovery** - Retrieve peer lists from trackers
 -   ✅ **Protocol abstraction** - Single interface for HTTP and UDP trackers
-
-### Limitations
-
--   No retry logic or timeout handling
--   No periodic re-announce scheduling
--   No connection pooling or concurrent tracker requests
+-   ✅ **Peer wire protocol** - Handshake, message parsing, and state management
+-   ✅ **Concurrent piece coordination** - Block level tracking across multiple peers
+-   🚧 **File download** - In progress: block requests, piece assembly, verification
 
 ### What You Can Do Today
 -   Parse any .torrent file (single or multi-file)
@@ -33,13 +30,18 @@ This library is in **early development**. Core components (bencode, metadata par
 -   Announce to HTTP/S and UDP trackers
 -   Retrieve lists of peers from the swarm
 -   Get swarm statistics (seeders, leechers, re-announce interval)
+-   Establish connection with peers via handshake
+-   Exchange BitTorrent protocol messages
+-   Request and receive piece blocks from peers
+-   Track download progress at the block and piece level
 
 ### Not Yet Implemented
 
--   Peer wire protocol (connecting to/from peers)
--   Piece download/upload logic
--   File I/O and assembly
+-   Complete file assembly and writing to disk
+-   Upload/seeding functionality
 -   DHT, PEX, magnet links
+-   Resume support
+-   Rate limiting and bandwidth management
 -   High-level client API
 
 ## Architecture
@@ -64,6 +66,15 @@ This library is in **early development**. Core components (bencode, metadata par
 -   UDP tracker protocol
 -   Peer list retrieval
 
+**`pkg/peer_protocol`** - Peer wire protocol
+
+-   Handshake negotiation and validation
+-   Message encing/decoding
+-   Peer connection state management
+-   Block-level piece state tracking
+-   Concurrent peer coordination via PieceManager
+-   Thread-sage data storage with DataManager
+
 ## Installation
 
     go get github.com/drewslam/gotorrent
@@ -78,6 +89,7 @@ Requires Go 1.23 or later.
     import (
         "github.com/drewslam/gotorrent/pkg/torrent"
         "github.com/drewslam/gotorrent/pkg/tracker"
+        "github.com/drewslam/gotorrent/pkg/peer_protocol"
     )
 
     // Parse a torrent file
@@ -93,10 +105,17 @@ Requires Go 1.23 or later.
     url, _ := url.Parse(tor.Announce[0])
     response, _ := req.Announce(url)
 
-    // response.Peers contains available peers
-    fmt.Printf("Found %d peers\n", len(response.Peers))
-    fmt.Printf("Re-announce in %d seconds\n", response.Interval)
-    fmt.Printf("Swarm: %d seeders, %d leechers\n", response.Seeders, response.Leechers)
+    // Connect to peers and begin download
+    pm := peer_protocol.NewPieceManager(tor)
+    for index, peer := range response.Peers {
+        go peer_protocol.HandleConnection(peer.Address(), index, req, pm)
+    }
+
+    // Peers will automatically
+    // - Perform handshake
+    // - Exhchange bitfields
+    // - Request and download pieces
+    // - Verify piece hashes
 
 ## Design Goals
 
@@ -109,10 +128,21 @@ Requires Go 1.23 or later.
 
 ### Current Focus
 
--   ~~Unifying HTTP/UDP response types~~ ✅ Complete
--   Implementing peer wire protocol
--   Building piece verification logic
+-   Completing file I/O and piece assembly
+-   Adding upload/seeding support
+-   Implementing resume capability
 -   Adding test coverage
+
+### Architecture Notes
+
+The peer protocol implementation uses a multi-layered architecture:
+
+-   **DataManager**: Thread-sage storage for downloaded data and completion tracking
+-   **PieceManager**: Coordinates piece selection and block-level state across multiple peers
+-   **PieceState**: Tracks individual block requests and reception for each piece
+-   **PeerConn**: Handles network I/O and protocol message exchange with individual peers
+
+This design allows multiple peers to concurrently download different pieces while preventing duplicate work.
 
 ## License
 
