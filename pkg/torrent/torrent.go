@@ -24,14 +24,14 @@ type Torrent struct {
 
 type InfoDict struct {
 	Name     string
-	PieceLen int
+	PieceLen uint32
 	Pieces   [][20]byte
 	Files    []*FileDict
 	UrlList  []string
 }
 
 type FileDict struct {
-	Length int
+	Length uint64
 	Path   []string
 }
 
@@ -43,7 +43,7 @@ func NewTorrent(info *InfoDict, announce []string, byts []byte) *Torrent {
 	}
 }
 
-func NewInfoDict(name string, pieceLen int, pieces [][20]byte, fileDict []*FileDict, urlList []string) *InfoDict {
+func NewInfoDict(name string, pieceLen uint32, pieces [][20]byte, fileDict []*FileDict, urlList []string) *InfoDict {
 	return &InfoDict{
 		Name:     name,
 		PieceLen: pieceLen,
@@ -53,7 +53,7 @@ func NewInfoDict(name string, pieceLen int, pieces [][20]byte, fileDict []*FileD
 	}
 }
 
-func NewFileDict(length int, path []string) *FileDict {
+func NewFileDict(length uint64, path []string) *FileDict {
 	return &FileDict{
 		Length: length,
 		Path:   path,
@@ -71,7 +71,7 @@ func (t *Torrent) FileSize() uint64 {
 
 	var fs uint64 = 0
 	for _, file := range t.Info.Files {
-		fs += uint64(file.Length)
+		fs += file.Length
 	}
 
 	return fs
@@ -309,7 +309,7 @@ func extractFileName(node *bcodec.BDictEntry) (string, error) {
 	return string(a.GetValue().Strval), nil
 }
 
-func extractPieceLength(node *bcodec.BDictEntry) (int, error) {
+func extractPieceLength(node *bcodec.BDictEntry) (uint32, error) {
 	if node == nil {
 		return 0, fmt.Errorf("piece length cannot be parsed: %v", node)
 	}
@@ -319,7 +319,7 @@ func extractPieceLength(node *bcodec.BDictEntry) (int, error) {
 		return 0, fmt.Errorf("cannot parse node: %v", a)
 	}
 
-	return int(a.GetValue().Big_ival), nil
+	return uint32(a.GetValue().Big_ival), nil
 }
 
 func extractPieceArray(node *bcodec.BDictEntry) ([]byte, error) {
@@ -361,7 +361,7 @@ func extractInfoBytes(node *bcodec.BDictEntry, rawBytes []byte) ([]byte, error) 
 	return rawBytes[start:end], nil
 }
 
-func extractSingleFileLength(node *bcodec.BDictEntry) (int, error) {
+func extractSingleFileLength(node *bcodec.BDictEntry) (uint64, error) {
 	if node == nil {
 		return 0, fmt.Errorf("length field missing")
 	}
@@ -371,5 +371,5 @@ func extractSingleFileLength(node *bcodec.BDictEntry) (int, error) {
 		return 0, fmt.Errorf("invalid length property: %v", a)
 	}
 
-	return int(a.GetValue().Big_ival), nil
+	return uint64(a.GetValue().Big_ival), nil
 }
