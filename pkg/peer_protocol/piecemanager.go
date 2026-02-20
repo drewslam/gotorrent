@@ -9,19 +9,23 @@ package peer_protocol
 import (
 	"encoding/binary"
 	"fmt"
+
+	// "os"
 	"sync"
 
+	"github.com/drewslam/gotorrent/pkg/storage"
 	"github.com/drewslam/gotorrent/pkg/torrent"
 )
 
 type PieceManager struct {
 	DataMgr *DataManager
 	PcState map[uint32]*PieceState
+	Storage *storage.FileStorage
 
 	mu sync.RWMutex
 }
 
-func NewPieceManager(tor *torrent.Torrent) *PieceManager {
+func NewPieceManager(tor *torrent.Torrent, fs *storage.FileStorage) *PieceManager {
 	numPieces := uint32(len(tor.Info.Pieces))
 	pieceLen := uint32(tor.Info.PieceLen)
 	pieces := tor.Info.Pieces
@@ -32,6 +36,7 @@ func NewPieceManager(tor *torrent.Torrent) *PieceManager {
 	return &PieceManager{
 		DataMgr: dm,
 		PcState: make(map[uint32]*PieceState),
+		Storage: fs,
 	}
 }
 
@@ -192,10 +197,12 @@ func (pm *PieceManager) HandlePieceMessage(msg *Message) (uint32, bool) {
 	return pieceIndex, isComplete
 }
 
+/*
 func (pm *PieceManager) containsIndex(index uint32) bool {
 	_, ok := pm.PcState[index]
 	return ok
 }
+*/
 
 func (pm *PieceManager) GetNextBlock(index uint32) (uint32, uint32, bool) {
 	pm.mu.Lock()
