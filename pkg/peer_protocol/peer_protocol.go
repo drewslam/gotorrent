@@ -44,20 +44,18 @@ func NewPeerState() *PeerState {
 	}
 }
 
-func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm *PieceManager) {
+func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm *PieceManager) error {
 	handshake := NewHandshake(req.InfoHash, req.Peer.ID)
 
 	conn, err := net.DialTimeout("tcp", peerAddr, time.Second*10)
 	if err != nil {
-		fmt.Printf("tcp connection failure: %v\n", err)
-		return
+		return fmt.Errorf("tcp connection failure: %v\n", err)
 	}
 	defer conn.Close()
 
 	theirPeerID, err := handshake.FetchPeer(conn)
 	if err != nil {
-		fmt.Printf("peer %d handshake failed: %v\n", peerIdx, err)
-		return
+		return fmt.Errorf("peer %d handshake failed: %v\n", peerIdx, err)
 	}
 
 	connectedState := NewPeerConn(conn, theirPeerID, pm)
@@ -78,16 +76,14 @@ func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm 
 	for {
 		msg, err := connectedState.ReadMsg()
 		if err != nil {
-			fmt.Printf("peer %d read error: %v\n", peerIdx, err)
-			return
+			return fmt.Errorf("peer %d read error: %v\n", peerIdx, err)
 		}
 
 		fmt.Printf("msg %s received from peer %d\n", msg.ID.String(), peerIdx)
 
 		err = connectedState.WriteMsgResponse(msg)
 		if err != nil {
-			fmt.Printf("peer %d write error: %v\n", peerIdx, err)
-			return
+			return fmt.Errorf("peer %d write error: %v\n", peerIdx, err)
 		}
 	}
 }

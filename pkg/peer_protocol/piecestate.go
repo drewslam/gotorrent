@@ -7,7 +7,7 @@
  */
 package peer_protocol
 
-import "fmt"
+// import "fmt"
 
 type BlockState struct {
 	Offset    uint32
@@ -54,22 +54,21 @@ func NewPieceState(index uint32, pieceSize uint32) *PieceState {
 func (ps *PieceState) AddBlock(offset uint32, data []byte) bool {
 	for i := range ps.Blocks {
 		if ps.Blocks[i].Offset == offset && !ps.Blocks[i].Received {
-			fmt.Printf("marking offset=%v as received\n", offset)
+			//	fmt.Printf("marking offset=%v as received\n", offset)
 			ps.Blocks[i].Received = true
 			return true
 		}
 	}
-	fmt.Printf("failed to find block with offset %d in piece blocks\n", offset)
+	// fmt.Printf("failed to find block with offset %d in piece blocks\n", offset)
 	return false
 }
 
 func (ps *PieceState) NextBlockToRequest() (uint32, uint32, bool) {
 	for i := range len(ps.Blocks) {
-		fmt.Printf("Block[%d]: offset=%d Requested=%t Received=%t\n", i, ps.Blocks[i].Offset, ps.Blocks[i].Requested, ps.Blocks[i].Received)
+		//	fmt.Printf("Block[%d]: offset=%d Requested=%t Received=%t\n", i, ps.Blocks[i].Offset, ps.Blocks[i].Requested, ps.Blocks[i].Received)
 		if !ps.Blocks[i].Received && !ps.Blocks[i].Requested {
 			ps.Blocks[i].Requested = true
 			return ps.Blocks[i].Offset, ps.Blocks[i].Length, true
-			// return uint32(i), ps.Blocks[i].Offset, true
 		}
 	}
 
