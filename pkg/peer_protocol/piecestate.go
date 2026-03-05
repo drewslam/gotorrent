@@ -9,6 +9,15 @@ package peer_protocol
 
 // import "fmt"
 
+type PieceStatus uint8
+
+const (
+	Missing PieceStatus = iota
+	InProgress
+	Verifying
+	Complete
+)
+
 type BlockState struct {
 	Offset    uint32
 	Length    uint32
@@ -18,6 +27,7 @@ type BlockState struct {
 
 type PieceState struct {
 	Index  uint32
+	Status PieceStatus
 	Blocks []BlockState
 }
 
@@ -47,15 +57,17 @@ func NewPieceState(index uint32, pieceSize uint32) *PieceState {
 
 	return &PieceState{
 		Index:  index,
+		Status: Missing,
 		Blocks: blocks,
 	}
 }
 
 func (ps *PieceState) AddBlock(offset uint32, data []byte) bool {
 	for i := range ps.Blocks {
-		if ps.Blocks[i].Offset == offset && !ps.Blocks[i].Received {
+		if ps.Blocks[i].Offset == offset{
 			//	fmt.Printf("marking offset=%v as received\n", offset)
 			ps.Blocks[i].Received = true
+			ps.UpdateStatus()
 			return true
 		}
 	}
@@ -97,4 +109,45 @@ func (ps *PieceState) IsComplete() bool {
 	}
 
 	return true
+}
+
+func (ps *PieceState) UpdateStatus() {
+	allReceived := true
+	anyReceived := false
+
+	for _, block := range ps.Blocks {
+		if block.Received {
+			anyReceived = true
+		} else {
+			allReceived = false
+		}
+	}
+
+	if allReceived {
+		ps.Status = Verifying
+	} else if anyReceived {
+		ps.Status = InProgress
+	} else {
+		ps.Status = Missing
+	}
+}
+
+func (ps *PieceState) MarkReceived(offset uint32) bool {
+	for i := range ps.Blocks {
+		if ps.Blocks[i].Offset == offset {
+			ps.Blocks[i].Received = true
+			ps.UpdateStatus()
+			return true
+		}
+	}
+
+	return false
+}
+
+func (ps *PieceState) Reset() {
+	ps.Status = Missing
+	for i := range ps.Blocks {
+		ps.Blocks[i].Requested = false
+		ps.Blocks[i].Received = false
+	}
 }
