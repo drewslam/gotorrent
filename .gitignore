@@ -1,4 +1,6 @@
 *.org
 *.torrent
 *.txt
-main 
+main
+*.iso
+*.iso\
