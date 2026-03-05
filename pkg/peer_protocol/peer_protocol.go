@@ -44,31 +44,47 @@ func NewPeerState() *PeerState {
 	}
 }
 
-func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm *PieceManager) error {
+func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm *PieceManager, onConnect func(*PeerConn), onHave func(uint32)) error {
 	handshake := NewHandshake(req.InfoHash, req.Peer.ID)
 
 	conn, err := net.DialTimeout("tcp", peerAddr, time.Second*10)
 	if err != nil {
-		return fmt.Errorf("tcp connection failure: %v\n", err)
+		return fmt.Errorf("tcp connection failure")
 	}
 	defer conn.Close()
 
 	theirPeerID, err := handshake.FetchPeer(conn)
 	if err != nil {
-		return fmt.Errorf("peer %d handshake failed: %v\n", peerIdx, err)
+		return fmt.Errorf("peer %d handshake failed: %v", peerIdx, err)
 	}
 
 	connectedState := NewPeerConn(conn, theirPeerID, pm)
 
+	onConnect(connectedState)
+
 	// keep alive
-	ticker := time.NewTicker(time.Minute * 2)
-	defer ticker.Stop()
+	ticker_keepalive := time.NewTicker(time.Minute * 2)
+	defer ticker_keepalive.Stop()
 
 	go func() {
-		for range ticker.C {
+		for range ticker_keepalive.C {
 			keepAlive := &Message{Length: 0}
 			if _, err := conn.Write(keepAlive.Serialize()); err != nil {
 				return
+			}
+		}
+	}()
+
+	// check completion
+	ticker_completion := time.NewTicker(time.Minute * 20)
+	defer ticker_completion.Stop()
+
+	go func() {
+		for range ticker_completion.C {
+			missing := pm.MissingPieces()
+			if (len(missing)/int(pm.DataMgr.NumPieces))*100 < 5 {
+				// endgame mode
+				pm.PrintMissingPieces()
 			}
 		}
 	}()
@@ -81,7 +97,7 @@ func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm 
 
 		fmt.Printf("msg %s received from peer %d\n", msg.ID.String(), peerIdx)
 
-		err = connectedState.WriteMsgResponse(msg)
+		err = connectedState.WriteMsgResponse(msg, onHave)
 		if err != nil {
 			return fmt.Errorf("peer %d write error: %v\n", peerIdx, err)
 		}
