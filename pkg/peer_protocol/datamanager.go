@@ -18,8 +18,9 @@ type DataManager struct {
 	NumPieces   uint32
 	PiecesHash  [][20]byte
 
-	Data      []byte
-	Completed []byte
+	//	Data         []byte
+	ActivePieces map[uint32][]byte
+	Completed    []byte
 
 	mu sync.RWMutex
 }
@@ -27,12 +28,13 @@ type DataManager struct {
 func NewDataManager(pl uint32, tl uint64, np uint32, ph [][20]byte) *DataManager {
 	bitfieldSize := (np + 7) / 8
 	return &DataManager{
-		PieceLength: pl,
-		TotalLength: tl,
-		NumPieces:   np,
-		PiecesHash:  ph,
-		Data:        make([]byte, tl),
-		Completed:   make([]byte, bitfieldSize),
+		PieceLength:  pl,
+		TotalLength:  tl,
+		NumPieces:    np,
+		PiecesHash:   ph,
+		//	Data:         make([]byte, tl),
+		ActivePieces: make(map[uint32][]byte),
+		Completed:    make([]byte, bitfieldSize),
 	}
 }
 
@@ -45,12 +47,29 @@ func (dm *DataManager) StoreBlock(index uint32, offset uint32, data []byte) {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 
-	pieceStart := uint64(index) * uint64(dm.PieceLength)
-	blockStart := pieceStart + uint64(offset)
+	buf, ok := dm.ActivePieces[index]
+	if !ok {
+		buf = make([]byte, dm.PieceSize(index))
+		dm.ActivePieces[index] = buf
+	}
 
-	copy(dm.Data[blockStart:], data)
+	copy(buf[offset:], data)
 }
 
+func (dm *DataManager) AssembleAndClear(pieceIndex uint32) []byte {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+
+	buf, ok := dm.ActivePieces[pieceIndex]
+	if !ok {
+		return nil
+	}
+
+	delete(dm.ActivePieces, pieceIndex)
+	return buf
+}
+
+/*
 func (dm *DataManager) AssemblePiece(pieceIndex uint32) []byte {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
@@ -64,6 +83,7 @@ func (dm *DataManager) AssemblePiece(pieceIndex uint32) []byte {
 
 	return piece
 }
+*/
 
 func (dm *DataManager) PieceSize(index uint32) uint32 {
 	if index == dm.NumPieces - 1 {
