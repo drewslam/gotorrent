@@ -67,10 +67,12 @@ func (p *PeerConn) ReadMsg() (*Message, error) {
 		p.PeerState.Choking = false
 	case Interested:
 		p.PeerState.Interested = true
+		p.PeerState.Choking = false
 	case NotInterested:
 		p.PeerState.Interested = false
 	case Bitfield:
 		p.Bitfield = msgBuf[1:]
+		p.ClientState.Interested = p.PieceMgr.DataMgr.IsInterested(p.Bitfield)
 	}
 
 	return NewMessageWP(lenPrefix, msgIndex, msgBuf[1:]), nil
@@ -87,17 +89,25 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 			fmt.Printf("   WARNING: peer bitfield is empty\n")
 		}
 
-		requestIndex, requestOffset, requestLength, ok := p.PieceMgr.HandleUnchoke(p.Bitfield)
-		if ok {
-			newMsg, err = p.PieceMgr.prepareRequest(requestIndex, requestLength, requestOffset)
-			if err != nil {
-				return fmt.Errorf("PrepareRequest failure: %w", err)
+		for range 5 {
+			if requestIndex, requestOffset, requestLength, ok := p.PieceMgr.SelectBlock(p.Bitfield); ok {
+				newMsg, err = p.PieceMgr.prepareRequest(requestIndex, requestLength, requestOffset)
+				if err != nil {
+					return fmt.Errorf("PrepareRequest failure: %w", err)
+				}
+				if _, err = p.Conn.Write(newMsg.Serialize()); err != nil {
+					return fmt.Errorf("write error: %w", err)
+				}
 			}
 		}
+
+		return nil
 	case Bitfield:
-		// amInterested = ParseBitfield(p.Bitfield)
-		p.ClientState.Interested = true
-		newMsg = NewMessageNP(Interested)
+		if p.ClientState.Interested {
+			newMsg = NewMessageNP(Interested)
+		} else {
+			newMsg = NewMessageNP(NotInterested)
+		}
 	case Piece:
 		pieceIndex, isComplete := p.PieceMgr.HandlePieceMessage(msg)
 
@@ -118,9 +128,14 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 				fmt.Printf("    piece size: %d bytes\n", len(buf))
 			}
 
-			newMsg, err = p.PieceMgr.FinishPiece(pieceIndex, p.Bitfield, verified)
-			if err != nil {
-				return fmt.Errorf("FinishPiece failure: %w", err)
+			comp, _ := p.PieceMgr.FinishPiece(pieceIndex, p.Bitfield, verified)
+			if !comp {
+				if nextIndex, nextOffset, nextLength, ok := p.PieceMgr.SelectBlock(p.Bitfield); ok {
+					newMsg, err = p.PieceMgr.prepareRequest(nextIndex, nextLength, nextOffset)
+					if err != nil {
+						return fmt.Errorf("prepareRequest failure: %w", err)
+					}
+				}
 			}
 		} else {
 			nextOffset, nextLength, ok := p.PieceMgr.GetNextBlock(pieceIndex)
@@ -161,14 +176,32 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 			break
 		}
 
-		blockData := piece[roffset:roffset+rlength]
+		blockData := piece[roffset : roffset+rlength]
 
 		payload := make([]byte, 8+len(blockData))
 		binary.BigEndian.PutUint32(payload[0:4], rindex)
 		binary.BigEndian.PutUint32(payload[4:8], roffset)
 		copy(payload[8:], blockData)
 
-		newMsg = NewMessageWP(uint32(1 + len(payload)), Piece, payload)
+		newMsg = NewMessageWP(uint32(1+len(payload)), Piece, payload)
+	case Have:
+		pieceIndex := binary.BigEndian.Uint32(msg.Payload[0:4])
+		byteIndex := pieceIndex / 8
+		bitIndex := 7 - (pieceIndex % 8)
+		if int(byteIndex) < len(p.Bitfield) {
+			p.Bitfield[byteIndex] |= 1 << bitIndex
+		}
+
+		wasInterested := p.ClientState.Interested
+		p.ClientState.Interested = p.PieceMgr.DataMgr.IsInterested(p.Bitfield)
+
+		if p.ClientState.Interested != wasInterested {
+			if p.ClientState.Interested {
+				newMsg = NewMessageNP(Interested)
+			} else {
+				newMsg = NewMessageNP(NotInterested)
+			}
+		}
 	}
 
 	if newMsg != nil {

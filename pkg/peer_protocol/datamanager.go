@@ -113,3 +113,19 @@ func (dm *DataManager) IsComplete(index uint32) bool {
 	bitIndex := 7 - (index % 8)
 	return dm.Completed[byteIndex] & (1 << bitIndex) != 0
 }
+
+func (dm *DataManager) IsInterested(peerBitfield []byte) bool {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+
+	for i, b := range peerBitfield {
+		if i >= len(dm.Completed) {
+			break
+		}
+		if b & ^dm.Completed[i] != 0 {
+			return true
+		}
+	}
+
+	return false
+}

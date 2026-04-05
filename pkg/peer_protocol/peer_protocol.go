@@ -58,6 +58,9 @@ func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm 
 		return fmt.Errorf("peer %d handshake failed: %v", peerIdx, err)
 	}
 
+	bf := NewMessageWP(uint32(1+len(pm.DataMgr.Completed)), Bitfield, pm.DataMgr.Completed)
+	conn.Write(bf.Serialize())
+
 	connectedState := NewPeerConn(conn, theirPeerID, pm)
 
 	onConnect(connectedState)
@@ -92,14 +95,15 @@ func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm 
 	for {
 		msg, err := connectedState.ReadMsg()
 		if err != nil {
-			return fmt.Errorf("peer %d read error: %v\n", peerIdx, err)
+			return fmt.Errorf("peer %d read error: %v", peerIdx, err)
 		}
 
 		fmt.Printf("msg %s received from peer %d\n", msg.ID.String(), peerIdx)
 
-		err = connectedState.WriteMsgResponse(msg, onHave)
-		if err != nil {
-			return fmt.Errorf("peer %d write error: %v\n", peerIdx, err)
+		if msg != nil {
+			if err := connectedState.WriteMsgResponse(msg, onHave); err != nil {
+				return fmt.Errorf("peer %d write error: %v", peerIdx, err)
+			}
 		}
 	}
 }

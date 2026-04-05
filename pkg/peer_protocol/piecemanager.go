@@ -101,23 +101,18 @@ func (pm *PieceManager) selectBlock(bitfield []byte) (uint32, uint32, uint32, bo
 	return 0, 0, 0, false
 }
 
-func (pm *PieceManager) FinishPiece(index uint32, bitfield []byte, verified bool) (*Message, error) {
+func (pm *PieceManager) FinishPiece(index uint32, bitfield []byte, verified bool) (bool, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
 	ps := pm.PcState[index]
-
 	if !verified {
 		if ps != nil {
 			ps.Reset()
 		}
 
-		_, ok := pm.handleFailure(index, bitfield)
-		if !ok {
-			return nil, nil
-		}
-
-		return pm.selectNextMessage(bitfield)
+		pm.handleFailure(index, bitfield)
+		return false, fmt.Errorf("integrity failure: piece %d failed SHA1", index)
 	}
 
 	if ps != nil {
@@ -127,14 +122,11 @@ func (pm *PieceManager) FinishPiece(index uint32, bitfield []byte, verified bool
 	pm.markComplete(index)
 	delete(pm.PcState, index)
 
-	if pm.isComplete() {
-		fmt.Printf("Download complete!\n")
-		return nil, nil
-	}
+	fmt.Printf("Download complete!\n")
 
-	return pm.selectNextMessage(bitfield)
+	return pm.isComplete(), nil
 }
-
+/*
 func (pm *PieceManager) selectNextMessage(bitfield []byte) (*Message, error) {
 	if nextIndex, nextOffset, nextLength, ok := pm.selectBlock(bitfield); ok {
 		return pm.prepareRequest(nextIndex, nextLength, nextOffset)
@@ -142,15 +134,15 @@ func (pm *PieceManager) selectNextMessage(bitfield []byte) (*Message, error) {
 
 	return nil, nil
 }
-
+*/
 func (pm *PieceManager) handleFailure(index uint32, bitfield []byte) (uint32, bool) {
 	// clear recent piece data from memory
-	pieceStart := uint64(index) * uint64(pm.DataMgr.PieceLength)
-	pieceSize := uint64(pm.DataMgr.PieceSize(index))
+	pieceStart := index * pm.DataMgr.PieceLength
+	pieceSize := pm.DataMgr.PieceSize(index)
 	pm.DataMgr.mu.Lock()
 	// zero out piece data
-	for i := uint64(0); i < uint64(pieceSize); i++ {
-		pm.DataMgr.Data[pieceStart+i] = 0
+	for i := range pieceSize {
+		pm.DataMgr.ActivePieces[pieceStart+i] = nil
 	}
 	pm.DataMgr.mu.Unlock()
 
@@ -163,6 +155,8 @@ func (pm *PieceManager) handleFailure(index uint32, bitfield []byte) (uint32, bo
 	}
 
 	delete(pm.PcState, index)
+
+	pm.ReleasePiece(index)
 
 	nextIndex, _, _, ok := pm.selectBlock(bitfield)
 	return nextIndex, ok
@@ -191,7 +185,27 @@ func (pm *PieceManager) markComplete(index uint32) {
 func (pm *PieceManager) ReleasePiece(index uint32) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	delete(pm.PcState, index)
+	ps, ok := pm.PcState[index]
+	if !ok {
+		return
+	}
+	for i, block := range ps.Blocks {
+		if block.Requested && !block.Received {
+			ps.Blocks[i].Requested = false
+		}
+	}
+	if ps.Status == InProgress {
+		hasRequested := false
+		for _, b := range ps.Blocks {
+			if b.Requested {
+				hasRequested = true
+				break
+			}
+		}
+		if !hasRequested {
+			ps.Status = Missing
+		}
+	}
 }
 
 func (pm *PieceManager) IsComplete() bool {
