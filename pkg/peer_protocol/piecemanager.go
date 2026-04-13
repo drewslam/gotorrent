@@ -9,6 +9,8 @@ package peer_protocol
 import (
 	"encoding/binary"
 	"fmt"
+	"math/rand"
+	"sort"
 	"time"
 
 	// "os"
@@ -18,10 +20,17 @@ import (
 	"github.com/drewslam/gotorrent/pkg/torrent"
 )
 
+type pieceFreqEntry struct {
+	index uint32
+	freq  int
+}
+
 type PieceManager struct {
 	DataMgr *DataManager
 	PcState map[uint32]*PieceState
 	Storage *storage.FileStorage
+
+	PieceFrequency []int
 
 	FailedPieces map[uint32]int
 	BannedUntil  map[uint32]time.Time
@@ -38,11 +47,12 @@ func NewPieceManager(tor *torrent.Torrent, fs *storage.FileStorage) *PieceManage
 	dm := NewDataManager(pieceLen, fileSize, numPieces, pieces)
 
 	return &PieceManager{
-		DataMgr:      dm,
-		PcState:      make(map[uint32]*PieceState),
-		Storage:      fs,
-		FailedPieces: make(map[uint32]int),
-		BannedUntil:  make(map[uint32]time.Time),
+		DataMgr:        dm,
+		PcState:        make(map[uint32]*PieceState),
+		Storage:        fs,
+		PieceFrequency: make([]int, numPieces),
+		FailedPieces:   make(map[uint32]int),
+		BannedUntil:    make(map[uint32]time.Time),
 	}
 }
 
@@ -64,11 +74,52 @@ func (pm *PieceManager) SelectPiece(bitfield []byte) (uint32, bool) {
 
 func (pm *PieceManager) SelectBlock(bitfield []byte) (uint32, uint32, uint32, bool) {
 	pm.mu.Lock()
-	defer func() {
-		pm.mu.Unlock()
-	}()
+	defer pm.mu.Unlock()
 
-	return pm.selectBlock(bitfield)
+	window := pm.rarestPieceWindow(bitfield)
+	for _, pieceIndex := range window {
+		ps, exists := pm.PcState[pieceIndex]
+		if !exists {
+			ps = NewPieceState(pieceIndex, pm.pieceSize(pieceIndex))
+			pm.PcState[pieceIndex] = ps
+		}
+		if nextOffset, nextLength, ok := ps.NextBlockToRequest(); ok {
+			return pieceIndex, nextOffset, nextLength, true
+		}
+	}
+	return 0, 0, 0, false
+	// return pm.selectBlock(bitfield)
+}
+
+func (pm *PieceManager) rarestPieceWindow(bitfield []byte) []uint32 {
+	var options []pieceFreqEntry
+
+	for i, freq := range pm.PieceFrequency {
+		idx := uint32(i)
+		if isBitInBitfield(idx, pm.DataMgr.Completed) || !PeerHasPiece(bitfield, idx) || pm.isBanned(idx) {
+			continue
+		}
+		pfe := pieceFreqEntry{index: idx, freq: freq}
+		options = append(options, pfe)
+	}
+
+	sort.Slice(options, func(i, j int) bool { return options[i].freq < options[j].freq })
+
+	limit := 10
+	if len(options) < limit {
+		limit = len(options)
+	}
+
+	window := make([]uint32, limit)
+	for i := range limit {
+		window[i] = options[i].index
+	}
+
+	rand.Shuffle(len(window), func(i int, j int) {
+		window[i], window[j] = window[j], window[i]
+	})
+
+	return window
 }
 
 func (pm *PieceManager) selectBlock(bitfield []byte) (uint32, uint32, uint32, bool) {
@@ -126,14 +177,15 @@ func (pm *PieceManager) FinishPiece(index uint32, bitfield []byte, verified bool
 
 	return pm.isComplete(), nil
 }
-/*
-func (pm *PieceManager) selectNextMessage(bitfield []byte) (*Message, error) {
-	if nextIndex, nextOffset, nextLength, ok := pm.selectBlock(bitfield); ok {
-		return pm.prepareRequest(nextIndex, nextLength, nextOffset)
-	}
 
-	return nil, nil
-}
+/*
+	func (pm *PieceManager) selectNextMessage(bitfield []byte) (*Message, error) {
+		if nextIndex, nextOffset, nextLength, ok := pm.selectBlock(bitfield); ok {
+			return pm.prepareRequest(nextIndex, nextLength, nextOffset)
+		}
+
+		return nil, nil
+	}
 */
 func (pm *PieceManager) handleFailure(index uint32, bitfield []byte) (uint32, bool) {
 	// clear recent piece data from memory
@@ -307,6 +359,45 @@ func (pm *PieceManager) GetNextBlock(index uint32) (uint32, uint32, bool) {
 	}
 
 	return pm.PcState[index].NextBlockToRequest()
+}
+
+func (pm *PieceManager) AddPeerBitfield(bitfield []byte) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	for i, b := range bitfield {
+		for bit := range 8 {
+			if b&(1<<(7-bit)) != 0 {
+				pieceIndex := uint32(i*8 + bit)
+				if pieceIndex < uint32(len(pm.PieceFrequency)) {
+					pm.PieceFrequency[pieceIndex]++
+				}
+			}
+		}
+	}
+}
+
+func (pm *PieceManager) RemovePeerBitfield(bitfield []byte) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	for i, b := range bitfield {
+		for bit := range 8 {
+			if b&(1<<(7-bit)) != 0 {
+				pieceIndex := uint32(i*8 + bit)
+				if pieceIndex < uint32(len(pm.PieceFrequency)) && pm.PieceFrequency[pieceIndex] > 0 {
+					pm.PieceFrequency[pieceIndex]--
+				}
+			}
+		}
+	}
+}
+
+func (pm *PieceManager) UpdatePeerHave(pieceIndex uint32) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pm.PieceFrequency[pieceIndex]++
 }
 
 func (pm *PieceManager) isBanned(index uint32) bool {
