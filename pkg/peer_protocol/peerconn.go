@@ -205,6 +205,13 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 				newMsg = NewMessageNP(NotInterested)
 			}
 		}
+
+		if !p.PeerState.Choking && p.ClientState.Interested {
+			if reqIndex, reqOffset, reqLen, ok := p.PieceMgr.SelectBlock(p.Bitfield); ok {
+				newReq, _ := p.PieceMgr.prepareRequest(reqIndex, reqLen, reqOffset)
+				p.Conn.Write(newReq.Serialize())
+			}
+		}
 	}
 
 	if newMsg != nil {
