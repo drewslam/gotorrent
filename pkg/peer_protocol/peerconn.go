@@ -72,6 +72,7 @@ func (p *PeerConn) ReadMsg() (*Message, error) {
 		p.PeerState.Interested = false
 	case Bitfield:
 		p.Bitfield = msgBuf[1:]
+		p.PieceMgr.AddPeerBitfield(p.Bitfield)
 		p.ClientState.Interested = p.PieceMgr.DataMgr.IsInterested(p.Bitfield)
 	}
 
@@ -103,6 +104,7 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 
 		return nil
 	case Bitfield:
+		p.PieceMgr.AddPeerBitfield(msg.Payload)
 		if p.ClientState.Interested {
 			newMsg = NewMessageNP(Interested)
 		} else {
@@ -191,6 +193,7 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 		if int(byteIndex) < len(p.Bitfield) {
 			p.Bitfield[byteIndex] |= 1 << bitIndex
 		}
+		p.PieceMgr.UpdatePeerHave(pieceIndex)
 
 		wasInterested := p.ClientState.Interested
 		p.ClientState.Interested = p.PieceMgr.DataMgr.IsInterested(p.Bitfield)

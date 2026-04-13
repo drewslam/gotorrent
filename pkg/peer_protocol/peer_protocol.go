@@ -62,6 +62,7 @@ func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm 
 	conn.Write(bf.Serialize())
 
 	connectedState := NewPeerConn(conn, theirPeerID, pm)
+	defer pm.RemovePeerBitfield(connectedState.Bitfield)
 
 	onConnect(connectedState)
 
