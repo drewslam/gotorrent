@@ -7,6 +7,11 @@
  */
 package peer_protocol
 
+import (
+	"sync"
+	"time"
+)
+
 // import "fmt"
 
 type PieceStatus uint8
@@ -23,12 +28,14 @@ type BlockState struct {
 	Length    uint32
 	Requested bool
 	Received  bool
+	RequestedAt time.Time
 }
 
 type PieceState struct {
 	Index  uint32
 	Status PieceStatus
 	Blocks []BlockState
+	mu sync.Mutex
 }
 
 func NewBlockState(offset uint32, length uint32) BlockState {
@@ -76,10 +83,14 @@ func (ps *PieceState) AddBlock(offset uint32, data []byte) bool {
 }
 
 func (ps *PieceState) NextBlockToRequest() (uint32, uint32, bool) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
 	for i := range len(ps.Blocks) {
 		//	fmt.Printf("Block[%d]: offset=%d Requested=%t Received=%t\n", i, ps.Blocks[i].Offset, ps.Blocks[i].Requested, ps.Blocks[i].Received)
 		if !ps.Blocks[i].Received && !ps.Blocks[i].Requested {
 			ps.Blocks[i].Requested = true
+			ps.Blocks[i].RequestedAt = time.Now()
 			return ps.Blocks[i].Offset, ps.Blocks[i].Length, true
 		}
 	}
