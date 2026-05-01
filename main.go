@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("allocation failure: %v", err)
 	}
 
-	pr := connection_manager.NewPeerRegistry(40, req, pieceMgr)
+	pr := connection_manager.NewPeerRegistry(req, pieceMgr)
 	go pr.ClearExpiredBans()
 	go pr.ManagePeerConnections(connection_manager.MaxPeerConnections)
 

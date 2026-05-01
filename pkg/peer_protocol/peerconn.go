@@ -15,28 +15,29 @@ import (
 	"net"
 )
 
+const targetRequests = 5
+
 type PeerConn struct {
-	Conn   net.Conn
-	PeerID [20]byte
-
-	ClientState *PeerState
-	PeerState   *PeerState
-
-	Bitfield []byte
-
-	PieceMgr *PieceManager
+	Conn                net.Conn
+	PeerID              [20]byte
+	ClientState         *PeerState
+	PeerState           *PeerState
+	Bitfield            []byte
+	PieceMgr            *PieceManager
+	outstandingRequests int
 }
 
 func NewPeerConn(conn net.Conn, peerID [20]byte, pm *PieceManager) *PeerConn {
 	bitfieldSize := (pm.DataMgr.NumPieces + 7) / 8
 
 	return &PeerConn{
-		Conn:        conn,
-		PeerID:      peerID,
-		ClientState: NewPeerState(),
-		PeerState:   NewPeerState(),
-		Bitfield:    make([]byte, bitfieldSize),
-		PieceMgr:    pm,
+		Conn:                conn,
+		PeerID:              peerID,
+		ClientState:         NewPeerState(),
+		PeerState:           NewPeerState(),
+		Bitfield:            make([]byte, bitfieldSize),
+		PieceMgr:            pm,
+		outstandingRequests: 0,
 	}
 }
 
@@ -90,7 +91,7 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 			fmt.Printf("   WARNING: peer bitfield is empty\n")
 		}
 
-		for range 5 {
+		for p.outstandingRequests < targetRequests {
 			if requestIndex, requestOffset, requestLength, ok := p.PieceMgr.SelectBlock(p.Bitfield); ok {
 				newMsg, err = p.PieceMgr.prepareRequest(requestIndex, requestLength, requestOffset)
 				if err != nil {
@@ -99,6 +100,9 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 				if _, err = p.Conn.Write(newMsg.Serialize()); err != nil {
 					return fmt.Errorf("write error: %w", err)
 				}
+				p.outstandingRequests++
+			} else {
+				break
 			}
 		}
 
@@ -111,6 +115,10 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 			newMsg = NewMessageNP(NotInterested)
 		}
 	case Piece:
+		if p.outstandingRequests > 0 {
+			p.outstandingRequests--
+		}
+
 		pieceIndex, isComplete := p.PieceMgr.HandlePieceMessage(msg)
 
 		if isComplete {
@@ -139,6 +147,8 @@ func (p *PeerConn) WriteMsgResponse(msg *Message, onHave func(uint32)) error {
 					}
 				}
 			}
+
+			p.outstandingRequests--
 		} else {
 			nextOffset, nextLength, ok := p.PieceMgr.GetNextBlock(pieceIndex)
 			if !ok {

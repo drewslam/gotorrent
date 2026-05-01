@@ -19,7 +19,7 @@ import (
 	"github.com/drewslam/gotorrent/pkg/tracker"
 )
 
-const MaxPeerConnections uint32 = 60
+const MaxPeerConnections uint32 = 30
 
 type indexedPeer struct {
 	index uint32
@@ -48,14 +48,14 @@ type PeerRegistry struct {
 	mu                    sync.RWMutex
 }
 
-func NewPeerRegistry(numWorkers int, req *tracker.Request, pm *peer_protocol.PieceManager) *PeerRegistry {
+func NewPeerRegistry(req *tracker.Request, pm *peer_protocol.PieceManager) *PeerRegistry {
 	pr := &PeerRegistry{
 		ActivePeerConnections: make(map[uint32]*peer_protocol.PeerConn, MaxPeerConnections),
 		History:               make(map[string]*PeerStat, MaxPeerConnections),
 		jobQueue:              make(chan indexedPeer, MaxPeerConnections),
 	}
 
-	for range numWorkers {
+	for range MaxPeerConnections {
 		go pr.peerWorker(req, pm)
 	}
 
