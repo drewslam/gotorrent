@@ -73,22 +73,31 @@ func (pm *PieceManager) SelectPiece(bitfield []byte) (uint32, bool) {
 }
 
 func (pm *PieceManager) SelectBlock(bitfield []byte) (uint32, uint32, uint32, bool) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
 	window := pm.rarestPieceWindow(bitfield)
-	for _, pieceIndex := range window {
+
+	fmt.Printf("window size: %d\n", len(window))
+	if len(window) == 0 {
+		return pm.selectBlock(bitfield)
+	}
+
+	pm.mu.Lock()
+	states := make([]*PieceState, len(window))
+	for i, pieceIndex := range window {
 		ps, exists := pm.PcState[pieceIndex]
 		if !exists {
 			ps = NewPieceState(pieceIndex, pm.pieceSize(pieceIndex))
 			pm.PcState[pieceIndex] = ps
 		}
+		states[i] = ps
+	}
+	pm.mu.Unlock()
+
+	for i, ps := range states {
 		if nextOffset, nextLength, ok := ps.NextBlockToRequest(); ok {
-			return pieceIndex, nextOffset, nextLength, true
+			return window[i], nextOffset, nextLength, true
 		}
 	}
 	return 0, 0, 0, false
-	// return pm.selectBlock(bitfield)
 }
 
 func (pm *PieceManager) rarestPieceWindow(bitfield []byte) []uint32 {
@@ -106,9 +115,7 @@ func (pm *PieceManager) rarestPieceWindow(bitfield []byte) []uint32 {
 	sort.Slice(options, func(i, j int) bool { return options[i].freq < options[j].freq })
 
 	limit := 10
-	if len(options) < limit {
-		limit = len(options)
-	}
+	limit = min(len(options), limit)
 
 	window := make([]uint32, limit)
 	for i := range limit {
@@ -352,11 +359,10 @@ func (pm *PieceManager) containsIndex(index uint32) bool {
 
 func (pm *PieceManager) GetNextBlock(index uint32) (uint32, uint32, bool) {
 	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
 	if pm.PcState[index] == nil {
 		return 0, 0, false
 	}
+	pm.mu.Unlock()
 
 	return pm.PcState[index].NextBlockToRequest()
 }

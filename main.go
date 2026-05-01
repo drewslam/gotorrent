@@ -1,9 +1,14 @@
 /*
- *
+ * gotorrent - A simple BitTorrent client implementation in Go
+ * ==========================================================
  * title:   gotorrent
  * author:  Andrew Souza
  * license: GPLv3
  *
+ * Description:
+ *   This application implements a basic BitTorrent client.
+ *     It manages torrent metadata, peer connections, trackers,
+ *     and local storage allocation for downloading files.
  */
 package main
 
