@@ -85,11 +85,17 @@ func HandleConnection(peerAddr string, peerIdx uint32, req *tracker.Request, pm 
 
 	go func() {
 		for range ticker_completion.C {
-			missing := pm.MissingPieces()
-			if (len(missing)/int(pm.DataMgr.NumPieces))*100 < 5 {
-				// endgame mode
 				pm.PrintMissingPieces()
-			}
+		}
+	}()
+
+	// release stalled blocks
+	ticker_requested := time.NewTicker(time.Second * 30)
+	defer ticker_requested.Stop()
+
+	go func() {
+		for range ticker_requested.C {
+			pm.ReleaseTimedOutBlocks(time.Minute * 2)
 		}
 	}()
 

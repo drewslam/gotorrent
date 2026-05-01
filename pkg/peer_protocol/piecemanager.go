@@ -433,3 +433,25 @@ func (pm *PieceManager) PrintMissingPieces() {
 
 	fmt.Printf("\nmissing %d pieces: %v\n", len(missing), missing)
 }
+
+func (pm *PieceManager) ReleaseTimedOutBlocks(timeout time.Duration) []uint32 {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	requested := []uint32{}
+	for iindex, i := range pm.PcState {
+		i.mu.Lock()
+		for idx := range i.Blocks {
+			if i.Blocks[idx].Requested == true && !i.Blocks[idx].Received && time.Since(i.Blocks[idx].RequestedAt) > timeout {
+				i.Blocks[idx].Requested = false
+				requested = append(requested, iindex)
+				if i.Status == InProgress {
+					i.Status = Missing
+				}
+			}
+		}
+		i.mu.Unlock()
+	}
+
+	return requested
+}
