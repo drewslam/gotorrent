@@ -60,6 +60,7 @@ func main() {
 		rs, err := AnnounceToTrackers(tor.Announce, req)
 		if err != nil {
 			log.Print("announceToTrackers failure: %w", err)
+			os.Exit(1)
 		}
 		interval := time.Duration(rs.Interval) * time.Second
 
