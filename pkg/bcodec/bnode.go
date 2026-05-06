@@ -5,7 +5,7 @@
  *  GPLv3
  *
  *  The bencode parser design for this library was influenced by the implementation in libktorrent from the KDE project.
- *  https://github.com/kde/libktorrent
+ *  https://invent,kde.org/network/libktorrent
  *
  */
 package bcodec
