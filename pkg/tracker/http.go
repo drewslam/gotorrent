@@ -68,7 +68,7 @@ func decodeHTTPResponse(resp *http.Response) (*Response, error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	db, err := bcodec.NewBDecoder(body, false, 0)
+	db, err := bcodec.NewBDecoder(body, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new bdecoder: %v", err)
 	}

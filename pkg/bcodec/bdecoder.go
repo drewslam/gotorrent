@@ -22,7 +22,7 @@ type BDecoder struct {
 	Level   int
 }
 
-func NewBDecoder(data []byte, verbose bool, off uint32) (*BDecoder, error) {
+func NewBDecoder(data []byte, off uint32) (*BDecoder, error) {
 	if data == nil {
 		return nil, fmt.Errorf("data cannot be nil")
 	}
@@ -30,10 +30,9 @@ func NewBDecoder(data []byte, verbose bool, off uint32) (*BDecoder, error) {
 		return nil, fmt.Errorf("offset %d exceeds data length %d", off, len(data))
 	}
 	return &BDecoder{
-		Data:    data,
-		Pos:     off,
-		Verbose: verbose,
-		Level:   0,
+		Data:  data,
+		Pos:   off,
+		Level: 0,
 	}, nil
 }
 

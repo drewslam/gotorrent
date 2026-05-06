@@ -89,7 +89,7 @@ func (t *Torrent) PrintMetadata() {
 }
 
 func DecodeTorrentFile(file []byte) (*Torrent, error) {
-	decoder, err := bcodec.NewBDecoder(file, false, 0)
+	decoder, err := bcodec.NewBDecoder(file, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create decoder: %v", err)
 	}
