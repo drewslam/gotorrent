@@ -68,7 +68,9 @@ This library is in **active development**. Core components (bencode, metadata pa
 
 ## Installation
 ```bash
-    go get github.com/drewslam/gotorrent
+    git clone https://github.com/drewslam/gotorrent.git
+    cd gotorrent
+    go install
 ```
 
 Requires Go 1.23 or later.
@@ -142,5 +144,5 @@ GPL-3.0 - See [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 -   BitTorrent protocol specification: [BEP 0003](http://www.bittorrent.org/beps/bep_0003.html)
--   [libktorrent](https://invent.kde.org/network/libktorrent) - Design influence for the bcodec package
+-   [libktorrent](https://libktorrent) - Design influence for the bcodec package
 -   Building a BitTorrent client from the ground up in Go, by Jesse Li (https://blog.jse.li/posts/torrent/)
